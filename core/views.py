@@ -96,6 +96,43 @@ def approve_loan(request, loan_id):
 
     return Response({"message": "Loan approved"})
 
+# -----------------------------
+# ❌ REJECT LOAN (ADMIN ONLY)
+# -----------------------------
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def reject_loan(request, loan_id):
+    try:
+        loan = Loan.objects.get(id=loan_id)
+    except Loan.DoesNotExist:
+        return Response({"error": "Loan not found"}, status=404)
+
+    loan.status = "rejected"
+    loan.save()
+
+    return Response({"message": "Loan rejected"})
+
+
+# -----------------------------
+# 📋 LIST PENDING LOANS (ADMIN ONLY)
+# -----------------------------
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def admin_loans(request):
+    loans = Loan.objects.filter(status="pending").order_by("-created_at")
+
+    return Response([
+        {
+            "id": loan.id,
+            "member": loan.user.username,
+            "amount": loan.amount,
+            "interest": loan.interest,
+            "status": loan.status,
+            "created_at": loan.created_at,
+        }
+        for loan in loans
+    ])
+
 
 # -----------------------------
 # 📊 DASHBOARD
@@ -115,6 +152,8 @@ def dashboard(request):
 
     return Response({
         "username": user.username,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
 
         "total_savings": total_savings,
         "total_loans": loans.count(),
