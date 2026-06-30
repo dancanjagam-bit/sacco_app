@@ -1,0 +1,15 @@
+# Python / Django
+venv/
+*.pyc
+__pycache__/
+*.sqlite3
+db.sqlite3
+
+# Node / React
+node_modules/
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
