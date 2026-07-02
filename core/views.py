@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from django.utils import timezone
 
 from django.db.models import Sum
 
@@ -63,9 +64,15 @@ def apply_loan(request):
     if amount <= 0:
         return Response({"error": "Amount must be greater than zero"}, status=400)
 
+    repayment_months = request.data.get(
+        "repayment_months",
+        12
+    )
     loan = Loan.objects.create(
         user=request.user,
-        amount=amount
+        amount=amount,
+        repayment_months=repayment_months,
+        balance=amount,
     )
 
     Transaction.objects.create(
@@ -92,6 +99,17 @@ def approve_loan(request, loan_id):
         return Response({"error": "Loan not found"}, status=404)
 
     loan.status = "approved"
+
+    loan.approved_by = request.user
+
+    loan.approved_at = timezone.now()
+
+    interest_amount = (
+    loan.amount * loan.interest
+    ) / Decimal("100")
+
+    loan.balance = loan.amount + interest_amount
+
     loan.save()
 
     return Response({"message": "Loan approved"})
@@ -119,16 +137,24 @@ def reject_loan(request, loan_id):
 @api_view(["GET"])
 @permission_classes([IsAdmin])
 def admin_loans(request):
-    loans = Loan.objects.filter(status="pending").order_by("-created_at")
+    loans = Loan.objects.all().order_by("-created_at")
 
     return Response([
         {
             "id": loan.id,
-            "member": loan.user.username,
+            "member": loan.user.get_full_name() or loan.user.username,
             "amount": loan.amount,
             "interest": loan.interest,
+            "repayment_months": loan.repayment_months,
+            "balance": loan.balance,
             "status": loan.status,
             "created_at": loan.created_at,
+            "approved_at": loan.approved_at,
+            "approved_by": (
+                loan.approved_by.get_full_name()
+                if loan.approved_by
+                else ""
+            ),
         }
         for loan in loans
     ])

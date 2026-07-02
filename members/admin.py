@@ -6,16 +6,16 @@ from .models import Member
 class MemberAdmin(admin.ModelAdmin):
     list_display = (
         "member_number",
-        "first_name",
-        "last_name",
+        "user",
         "phone_number",
         "status",
     )
 
     search_fields = (
         "member_number",
-        "first_name",
-        "last_name",
+        "user__username",
+        "user__first_name",
+        "user__last_name",
         "national_id",
     )
 
