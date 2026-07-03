@@ -187,19 +187,89 @@ def dashboard(request):
         "approved_loans": loans.filter(status="approved").count(),
 
         "loans": [
-            {
+             {
                 "id": loan.id,
                 "amount": loan.amount,
+                "balance": loan.balance,
+                "interest": loan.interest,
+                "repayment_months": loan.repayment_months,
                 "status": loan.status,
-            }
-            for loan in loans
-        ],
+             }
+             for loan in loans
+          ],
 
         "transactions": [
             {
+                "id": t.id,
                 "type": t.type,
                 "amount": t.amount,
+                "created_at": t.created_at,
             }
             for t in transactions
         ],
+    })
+
+
+# -----------------------------
+# 💳 REPAY LOAN
+# -----------------------------
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def repay_loan(request, loan_id):
+    try:
+        loan = Loan.objects.get(
+            id=loan_id,
+            user=request.user,
+        )
+    except Loan.DoesNotExist:
+        return Response(
+            {"error": "Loan not found"},
+            status=404,
+        )
+
+    if loan.status != "approved":
+        return Response(
+            {"error": "Only approved loans can be repaid"},
+            status=400,
+        )
+
+    try:
+        amount = Decimal(
+            str(request.data.get("amount", "0"))
+        )
+    except InvalidOperation:
+        return Response(
+            {"error": "Invalid amount"},
+            status=400,
+        )
+
+    if amount <= 0:
+        return Response(
+            {"error": "Amount must be greater than zero"},
+            status=400,
+        )
+
+    if amount > loan.balance:
+        return Response(
+            {"error": "Repayment exceeds outstanding balance"},
+            status=400,
+        )
+
+    loan.balance -= amount
+
+    if loan.balance == 0:
+        loan.status = "repaid"
+
+    loan.save()
+
+    Transaction.objects.create(
+        user=request.user,
+        type="repayment",
+        amount=amount,
+    )
+
+    return Response({
+        "message": "Repayment successful",
+        "balance": loan.balance,
+        "status": loan.status,
     })
