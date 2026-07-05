@@ -7,6 +7,7 @@ from .views import (
     repay_loan,
     admin_loans,
     dashboard,
+    export_transactions_excel,
 )
 
 urlpatterns = [
@@ -20,4 +21,8 @@ urlpatterns = [
     path("admin/loan/<int:loan_id>/approve/", approve_loan),
     path("admin/loan/<int:loan_id>/reject/", reject_loan),
     path("dashboard/", dashboard),
+    path(
+    "transactions/excel/",
+    export_transactions_excel,
+),
 ]

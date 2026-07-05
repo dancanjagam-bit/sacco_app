@@ -1,6 +1,9 @@
 from decimal import Decimal, InvalidOperation
 from django.utils import timezone
-
+from django.http import HttpResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from django.db.models import Sum
 
 from rest_framework.decorators import api_view, permission_classes
@@ -273,3 +276,81 @@ def repay_loan(request, loan_id):
         "balance": loan.balance,
         "status": loan.status,
     })
+
+# -----------------------------
+# 📊 EXPORT TRANSACTIONS TO EXCEL
+# -----------------------------
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def export_transactions_excel(request):
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Transaction Statement"
+
+    sheet["A1"] = "SACCO MANAGEMENT SYSTEM"
+    sheet["A1"].font = Font(size=16, bold=True)
+
+    sheet["A2"] = "Transaction Statement"
+    sheet["A2"].font = Font(size=13, bold=True)
+
+    sheet["A4"] = f"Member: {request.user.get_full_name() or request.user.username}"
+    sheet["A5"] = "Generated: " + timezone.now().strftime("%d %B %Y %H:%M")
+
+    sheet.append([])
+
+    headers = ["ID", "Date", "Type", "Amount"]
+    sheet.append(headers)
+
+    header_row = 7
+
+    for cell in sheet[header_row]:
+        cell.font = Font(bold=True)
+
+    transactions = Transaction.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
+
+    for transaction in transactions:
+        sheet.append([
+            transaction.id,
+            transaction.created_at.strftime("%d/%m/%Y"),
+            transaction.type.title(),
+            float(transaction.amount),
+        ])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="transactions.xlsx"'
+    )
+    sheet.append([])
+    sheet.append(["Summary"])
+
+    deposit_total = 0
+    loan_total = 0
+    repayment_total = 0
+
+    for transaction in transactions:
+        if transaction.type == "deposit":
+            deposit_total += float(transaction.amount)
+        elif transaction.type == "loan":
+            loan_total += float(transaction.amount)
+        elif transaction.type == "repayment":
+            repayment_total += float(transaction.amount)
+
+    sheet.append(["Total Deposits", deposit_total])
+    sheet.append(["Total Loans", loan_total])
+    sheet.append(["Total Repayments", repayment_total])
+
+    for column in sheet.columns:
+        length = max(len(str(cell.value or "")) for cell in column)
+        sheet.column_dimensions[
+            get_column_letter(column[0].column)
+        ].width = length + 4
+
+    workbook.save(response)
+
+    return response
