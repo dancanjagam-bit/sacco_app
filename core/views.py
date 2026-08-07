@@ -20,8 +20,11 @@ class IsAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated and
-            hasattr(request.user, "is_admin") and
-            request.user.is_admin
+            (
+                getattr(request.user, "is_admin", False)
+                or request.user.is_staff
+                or request.user.is_superuser
+            )
         )
 
 
