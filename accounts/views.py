@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Max
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -45,7 +46,8 @@ def register(request):
             email=email,
         )
 
-        member_number = f"SACCO{Member.objects.count() + 1:06d}"
+        last_member_id = Member.objects.aggregate(max_id=Max('id'))['max_id'] or 0
+        member_number = f"SACCO{last_member_id + 1:06d}"
 
         Member.objects.create(
             user=user,
