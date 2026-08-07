@@ -1,5 +1,4 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
 from rest_framework.decorators import api_view, permission_classes
@@ -29,28 +28,18 @@ def register(request):
     address = request.data.get("address")
 
     if not username or not password:
-        return Response(
-            {"error": "Username and password are required"},
-            status=400,
-        )
+        return Response({"error": "Username and password are required"}, status=400)
 
     if User.objects.filter(username=username).exists():
-        return Response(
-            {"error": "Username already exists"},
-            status=400,
-        )
+        return Response({"error": "Username already exists"}, status=400)
 
     if Member.objects.filter(national_id=national_id).exists():
-        return Response(
-            {"error": "National ID already exists"},
-            status=400,
-        )
+        return Response({"error": "National ID already exists"}, status=400)
 
     with transaction.atomic():
-
-        user = User.objects.create(
+        user = User.objects.create_user(
             username=username,
-            password=make_password(password),
+            password=password,
             first_name=first_name,
             last_name=last_name,
             email=email,
@@ -69,9 +58,4 @@ def register(request):
             address=address,
         )
 
-    return Response(
-        {
-            "message": "Registration successful",
-            "member_number": member_number,
-        }
-    )
+    return Response({"message": "Registration successful", "member_number": member_number})
