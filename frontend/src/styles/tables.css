@@ -1,0 +1,68 @@
+/* ===================================
+   Data Tables
+=================================== */
+
+.table-title {
+  margin: 28px 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 28px;
+}
+
+.data-table thead {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+}
+
+.data-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,.85);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.data-table td {
+  padding: 13px 16px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.data-table tbody tr { transition: background .15s; }
+.data-table tbody tr:nth-child(even) { background: #fafbfc; }
+.data-table tbody tr:hover { background: #eff6ff; }
+
+/* ── Status badges ── */
+.status {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-block;
+  text-transform: capitalize;
+}
+
+.status-approved { background: #dcfce7; color: #15803d; }
+.status-pending  { background: #fef3c7; color: #b45309; }
+.status-rejected { background: #fee2e2; color: #b91c1c; }
+.status-repaid   { background: #dbeafe; color: #1d4ed8; }
+.status-info     { background: #e0f2fe; color: #0369a1; }
+.status-active   { background: #dcfce7; color: #15803d; }
+.status-inactive { background: #f1f5f9; color: #64748b; }
+.status-suspended{ background: #fef3c7; color: #b45309; }
