@@ -72,7 +72,7 @@ def _send_otp(otp):
 
     print(f"\n{'='*50}")
     print(f"  OTP CODE:  {otp.code}")
-    print(f"  Via:       {otp.method}  →  {destination}")
+    print(f"  Via:       {otp.method}  ->  {destination}")
     print(f"  Expires:   {OTPRequest.EXPIRY_MINUTES} minutes")
     print(f"{'='*50}\n")
 

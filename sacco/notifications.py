@@ -35,8 +35,8 @@ def _send_sms(to_phone: str, message: str):
 
     if not at_username or not at_api_key:
         # Dev fallback — just log it
-        logger.info(f"[SMS → {to_phone}] {message}")
-        print(f"\n📱 SMS → {to_phone}\n{message}\n")
+        logger.info(f"[SMS -> {to_phone}] {message}")
+        print(f"\n[SMS -> {to_phone}]\n{message}\n")
         return
 
     try:
