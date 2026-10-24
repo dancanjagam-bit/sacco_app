@@ -1036,6 +1036,7 @@ def guarantor_pending(request):
     return Response([
         {
             "id":           g.id,
+            "loan_id":      g.loan_id,
             "borrower":     g.loan.user.get_full_name() or g.loan.user.username,
             "loan_amount":  float(g.loan.amount),
             "loan_months":  g.loan.repayment_months,
