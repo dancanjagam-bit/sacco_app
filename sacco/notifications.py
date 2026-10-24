@@ -23,9 +23,9 @@ def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
             html_message=html_body,
             fail_silently=False,
         )
-        logger.info(f"Email sent to {to_email}: {subject}")
+        logger.info("Email sent to %s", to_email)
     except Exception as e:
-        logger.error(f"Email failed to {to_email}: {e}")
+        logger.error("Email failed to %s: %s", to_email, type(e).__name__)
 
 
 def _send_sms(to_phone: str, message: str):
