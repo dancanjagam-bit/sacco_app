@@ -349,3 +349,49 @@ class ExitRequest(models.Model):
             return False
         from datetime import date
         return date.today() >= self.release_date
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔍 Financial Audit Finding
+# ─────────────────────────────────────────────────────────────────────────────
+class AuditFinding(models.Model):
+    SEVERITY_CHOICES = [
+        ("critical", "Critical"),
+        ("high",     "High"),
+        ("medium",   "Medium"),
+        ("low",      "Low"),
+        ("info",     "Info"),
+    ]
+    STATUS_CHOICES = [
+        ("open",      "Open"),
+        ("reviewing", "Under Review"),
+        ("resolved",  "Resolved"),
+        ("dismissed", "Dismissed"),
+    ]
+
+    rule          = models.CharField(max_length=50, help_text="Audit rule that triggered this finding")
+    severity      = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default="medium")
+    title         = models.CharField(max_length=200)
+    description   = models.TextField()
+    entity_type   = models.CharField(max_length=30, blank=True, default="")
+    entity_id     = models.IntegerField(null=True, blank=True)
+    user          = models.CharField(max_length=150, blank=True, default="")
+
+    status        = models.CharField(max_length=10, choices=STATUS_CHOICES, default="open")
+    reviewed_by   = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="reviewed_findings",
+    )
+    reviewed_at   = models.DateTimeField(null=True, blank=True)
+    review_notes  = models.TextField(blank=True, default="")
+    resolution     = models.TextField(blank=True, default="", help_text="How the finding was resolved")
+
+    # Batch tracking — which audit run discovered this
+    audit_run_id  = models.CharField(max_length=50, blank=True, default="")
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.severity.upper()}] {self.title}"

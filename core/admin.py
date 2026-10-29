@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Savings, Loan, Transaction, LoanGuarantor, AssetCollateral, SACCOSettings, SASRAReport, SavingsDividend, ExitRequest
+from .models import Savings, Loan, Transaction, LoanGuarantor, AssetCollateral, SACCOSettings, SASRAReport, SavingsDividend, ExitRequest, AuditFinding
 
 
 @admin.register(Savings)
@@ -66,3 +66,11 @@ class ExitRequestAdmin(admin.ModelAdmin):
     list_filter   = ("status",)
     search_fields = ("user__username", "user__first_name", "user__last_name")
     readonly_fields = ("bosa_balance", "has_active_loan", "has_guarantor_pledges", "created_at")
+
+
+@admin.register(AuditFinding)
+class AuditFindingAdmin(admin.ModelAdmin):
+    list_display  = ("rule", "severity", "title", "user", "status", "created_at")
+    list_filter   = ("severity", "status", "rule")
+    search_fields = ("title", "description", "user")
+    readonly_fields = ("audit_run_id", "created_at", "reviewed_by", "reviewed_at")

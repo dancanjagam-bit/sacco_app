@@ -30,6 +30,10 @@ from .views import (
     cancel_exit_request,
     admin_exit_requests,
     admin_review_exit,
+    run_audit,
+    audit_findings,
+    review_finding,
+    audit_report,
 )
 
 urlpatterns = [
@@ -84,4 +88,10 @@ urlpatterns = [
     # Exports
     path("transactions/excel/",              export_transactions_excel),
     path("statement/pdf/",                   export_statement_pdf),
+
+    # Financial audit engine
+    path("admin/audit/run/",                 run_audit),
+    path("admin/audit/findings/",            audit_findings),
+    path("admin/audit/findings/<int:finding_id>/review/", review_finding),
+    path("admin/audit/report/",              audit_report),
 ]

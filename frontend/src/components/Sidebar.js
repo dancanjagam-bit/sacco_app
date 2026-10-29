@@ -55,6 +55,7 @@ function Sidebar() {
               {link("/admin/assets",       "🏠", "Asset Registry")}
               {link("/admin/settings",     "⚙️", "SACCO Settings")}
               {link("/admin/exit-requests","🚪", "Exit Requests")}
+              {link("/admin/audit",        "🔍", "Financial Audit")}
 
               {isSuperAdmin && (
                 <>

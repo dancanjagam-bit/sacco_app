@@ -1672,3 +1672,187 @@ def admin_review_exit(request, exit_id):
             {"reason": req.rejection_reason}, request,
         )
         return Response({"message": "Exit request rejected."})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔍 Financial Audit Engine endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+from .audit_engine import run_full_audit, get_audit_summary
+from .models import AuditFinding
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def run_audit(request):
+    """
+    Execute the full financial audit engine.
+    Clears previous open findings and stores new ones.
+    Returns a summary of what was found.
+    """
+    import uuid
+
+    run_id = str(uuid.uuid4())[:8]
+
+    # Mark all previous open findings as superseded (dismissed) — they'll be re-checked
+    AuditFinding.objects.filter(status="open").update(
+        status="dismissed",
+        review_notes="Superseded by new audit run",
+    )
+
+    findings = run_full_audit()
+
+    created = []
+    for f in findings:
+        obj = AuditFinding.objects.create(
+            rule=f["rule"],
+            severity=f["severity"],
+            title=f["title"],
+            description=f["description"],
+            entity_type=f.get("entity_type", ""),
+            entity_id=f.get("entity_id"),
+            user=f.get("user", ""),
+            audit_run_id=run_id,
+        )
+        created.append(obj.id)
+
+    AuditLog.log(
+        request.user, "other", "Financial audit run",
+        {"run_id": run_id, "findings": len(findings)}, request,
+    )
+
+    return Response({
+        "message":    f"Audit complete: {len(findings)} finding(s) detected.",
+        "run_id":     run_id,
+        "summary":    get_audit_summary(),
+        "findings":   len(findings),
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def audit_findings(request):
+    """
+    List all audit findings with optional filters.
+    Query params: severity, status, rule, search
+    """
+    qs = AuditFinding.objects.all()
+
+    severity = request.query_params.get("severity")
+    if severity:
+        qs = qs.filter(severity=severity)
+
+    status_f = request.query_params.get("status")
+    if status_f:
+        qs = qs.filter(status=status_f)
+
+    rule = request.query_params.get("rule")
+    if rule:
+        qs = qs.filter(rule=rule)
+
+    search = request.query_params.get("search", "").strip()
+    if search:
+        qs = qs.filter(
+            Q(title__icontains=search)
+            | Q(description__icontains=search)
+            | Q(user__icontains=search)
+        )
+
+    # Paginate
+    page    = int(request.query_params.get("page", 1))
+    per_page = int(request.query_params.get("per_page", 25))
+    total   = qs.count()
+    qs      = qs[(page - 1) * per_page: page * per_page]
+
+    return Response({
+        "total":   total,
+        "page":    page,
+        "pages":   (total + per_page - 1) // per_page,
+        "summary": get_audit_summary(),
+        "results": [
+            {
+                "id":            f.id,
+                "rule":          f.rule,
+                "severity":      f.severity,
+                "title":         f.title,
+                "description":    f.description,
+                "entity_type":   f.entity_type,
+                "entity_id":     f.entity_id,
+                "user":          f.user,
+                "status":        f.status,
+                "reviewed_by":    f.reviewed_by.username if f.reviewed_by else "",
+                "reviewed_at":   f.reviewed_at,
+                "review_notes":  f.review_notes,
+                "resolution":    f.resolution,
+                "audit_run_id":  f.audit_run_id,
+                "created_at":    f.created_at,
+            }
+            for f in qs
+        ],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def review_finding(request, finding_id):
+    """
+    Review/resolve an audit finding.
+    Body: { status: "reviewing"|"resolved"|"dismissed", notes: "...", resolution: "..." }
+    """
+    try:
+        finding = AuditFinding.objects.get(id=finding_id)
+    except AuditFinding.DoesNotExist:
+        return Response({"error": "Finding not found."}, status=404)
+
+    new_status = request.data.get("status", "")
+    if new_status not in ("reviewing", "resolved", "dismissed", "open"):
+        return Response({"error": "Invalid status."}, status=400)
+
+    finding.status       = new_status
+    finding.reviewed_by   = request.user
+    finding.reviewed_at   = timezone.now()
+    finding.review_notes  = request.data.get("notes", "")
+    finding.resolution    = request.data.get("resolution", "")
+    finding.save()
+
+    AuditLog.log(
+        request.user, "other", f"Audit finding #{finding.id} → {new_status}",
+        {"rule": finding.rule, "severity": finding.severity}, request,
+    )
+
+    return Response({"message": f"Finding marked as {new_status}."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def audit_report(request):
+    """
+    Generate a full audit report with all findings grouped by rule and severity.
+    """
+    summary = get_audit_summary()
+    findings = AuditFinding.objects.filter(status__in=["open", "reviewing"]).order_by(
+        "-severity", "-created_at"
+    )
+
+    # Group by rule
+    by_rule = {}
+    for f in findings:
+        if f.rule not in by_rule:
+            by_rule[f.rule] = {"count": 0, "findings": []}
+        by_rule[f.rule]["count"] += 1
+        by_rule[f.rule]["findings"].append({
+            "id":          f.id,
+            "severity":    f.severity,
+            "title":       f.title,
+            "description": f.description,
+            "user":        f.user,
+            "status":      f.status,
+            "created_at":  f.created_at,
+        })
+
+    return Response({
+        "summary":    summary,
+        "open_count": findings.filter(status="open").count(),
+        "reviewing_count": findings.filter(status="reviewing").count(),
+        "by_rule":    by_rule,
+        "generated_at": timezone.now(),
+    })

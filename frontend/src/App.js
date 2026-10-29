@@ -30,6 +30,7 @@ import AuditLog       from "./pages/AuditLog";
 import AdminSettings  from "./pages/AdminSettings";
 import AdminAssets    from "./pages/AdminAssets";
 import AdminExitRequests from "./pages/AdminExitRequests";
+import AdminAudit     from "./pages/AdminAudit";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -79,6 +80,7 @@ function App() {
           <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
           <Route path="/admin/assets"   element={<AdminRoute><AdminAssets /></AdminRoute>} />
           <Route path="/admin/exit-requests" element={<AdminRoute><AdminExitRequests /></AdminRoute>} />
+          <Route path="/admin/audit"        element={<AdminRoute><AdminAudit /></AdminRoute>} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />

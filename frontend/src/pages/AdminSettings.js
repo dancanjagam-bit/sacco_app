@@ -4,7 +4,7 @@ import api from "../api/axios";
 import "../styles/dashboard.css";
 
 export default function AdminSettings() {
-  const [settings, setSettings] = useState(null);
+  const [, setSettings] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [saving,  setSaving]     = useState(false);
   const [msg,     setMsg]        = useState(null);
