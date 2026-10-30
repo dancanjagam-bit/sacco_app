@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from "recharts";
 
-function MonthlyChart({ title, data }) {
+function MonthlyChart({ title, data, color = "#2563eb" }) {
   const chartData = Array.isArray(data) ? data : [];
 
   return (
@@ -42,7 +42,7 @@ function MonthlyChart({ title, data }) {
               formatter={(value) => [`KES ${Number(value).toLocaleString()}`, "Amount"]}
               contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px" }}
             />
-            <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="total" fill={color} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}

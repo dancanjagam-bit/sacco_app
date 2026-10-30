@@ -1,45 +1,84 @@
 /* ===================================
-   SACCO Global Theme
+   SACCO Enterprise Theme v2
+   Design system: deep navy + electric blue + emerald
 =================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 :root {
-  --primary:        #2563eb;
-  --primary-dark:   #1d4ed8;
-  --primary-light:  #eff6ff;
+  /* ── Brand colours ── */
+  --primary:         #2563eb;
+  --primary-dark:    #1d4ed8;
+  --primary-light:   #eff6ff;
+  --primary-50:      #f0f9ff;
 
-  --success:        #16a34a;
-  --success-light:  #f0fdf4;
+  --navy:            #0f172a;
+  --navy-800:        #1e293b;
+  --navy-700:        #334155;
+  --navy-600:        #475569;
 
-  --warning:        #d97706;
-  --warning-light:  #fffbeb;
+  --emerald:         #059669;
+  --emerald-light:   #d1fae5;
 
-  --danger:         #dc2626;
-  --danger-light:   #fef2f2;
+  --amber:           #d97706;
+  --amber-light:     #fef3c7;
 
-  --info:           #0ea5e9;
-  --info-light:     #f0f9ff;
+  --rose:            #e11d48;
+  --rose-light:      #ffe4e6;
 
-  --purple:         #7c3aed;
-  --purple-light:   #f5f3ff;
+  --violet:          #7c3aed;
+  --violet-light:    #ede9fe;
 
-  --background:     #f1f5f9;
-  --card:           #ffffff;
-  --text:           #1e293b;
-  --muted:          #64748b;
-  --border:         #e2e8f0;
+  --cyan:            #0891b2;
+  --cyan-light:      #cffafe;
 
-  --shadow-sm:      0 1px 3px rgba(0,0,0,.08);
-  --shadow:         0 4px 16px rgba(0,0,0,.08);
-  --shadow-lg:      0 10px 30px rgba(0,0,0,.12);
+  /* ── Semantic aliases ── */
+  --success:         var(--emerald);
+  --success-light:   var(--emerald-light);
+  --warning:         var(--amber);
+  --warning-light:   var(--amber-light);
+  --danger:          var(--rose);
+  --danger-light:    var(--rose-light);
+  --info:            var(--cyan);
+  --info-light:      var(--cyan-light);
+  --purple:          var(--violet);
+  --purple-light:    var(--violet-light);
 
-  --radius-sm:      6px;
-  --radius:         12px;
-  --radius-lg:      16px;
+  /* ── Surface & text ── */
+  --background:      #f0f4f8;
+  --surface:         #f8fafc;
+  --card:            #ffffff;
+  --text:            #0f172a;
+  --text-secondary:  #374151;
+  --muted:           #64748b;
+  --border:          #e2e8f0;
+  --border-light:    #f1f5f9;
 
-  --font:           'Inter', 'Segoe UI', Arial, sans-serif;
+  /* ── Shadows ── */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,.05);
+  --shadow-sm:  0 1px 4px rgba(0,0,0,.07);
+  --shadow:     0 4px 16px rgba(0,0,0,.08);
+  --shadow-md:  0 6px 24px rgba(0,0,0,.1);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,.12);
+  --shadow-xl:  0 20px 60px rgba(0,0,0,.15);
+
+  /* ── Radii ── */
+  --radius-xs:  4px;
+  --radius-sm:  8px;
+  --radius:     12px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+
+  /* ── Typography ── */
+  --font:       'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* ── Transitions ── */
+  --transition: all .2s cubic-bezier(.4,0,.2,1);
 }
 
-* { box-sizing: border-box; }
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -47,4 +86,12 @@ body {
   background: var(--background);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }

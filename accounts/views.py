@@ -16,6 +16,7 @@ from sacco.notifications import (
     send_otp as deliver_otp,
     send_welcome,
 )
+from .id_verification import verify_national_id
 
 User = get_user_model()
 
@@ -141,36 +142,59 @@ def register(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
-    with transaction.atomic():
-        user = User.objects.create_user(
-            username=data["username"],
-            password=data["password"],
-            first_name=data.get("first_name", ""),
-            last_name=data.get("last_name", ""),
-            email=data.get("email", ""),
-            recovery_email=data.get("recovery_email", ""),
-            recovery_phone=data.get("recovery_phone", ""),
-        )
+    member_number = None
+    id_check      = {}
 
-        last_id = Member.objects.aggregate(max_id=Max("id"))["max_id"] or 0
-        member_number = f"SACCO{last_id + 1:06d}"
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=data["username"],
+                password=data["password"],
+                first_name=data.get("first_name", ""),
+                last_name=data.get("last_name", ""),
+                email=data.get("email", ""),
+                recovery_email=data.get("recovery_email", ""),
+                recovery_phone=data.get("recovery_phone", ""),
+            )
 
-        Member.objects.create(
-            user=user,
-            member_number=member_number,
-            national_id=data["national_id"],
-            phone_number=data["phone_number"],
-            gender=data["gender"],
-            date_of_birth=data["date_of_birth"],
-            county=data["county"],
-            address=data["address"],
-        )
+            last_id = Member.objects.aggregate(max_id=Max("id"))["max_id"] or 0
+            member_number = f"SACCO{last_id + 1:06d}"
 
-        Notification.send(user, "Welcome to SACCO!", f"Your member number is {member_number}.", "success", "/dashboard")
-        AuditLog.log(user, "register", f"Member {member_number}", {"username": user.username}, request)
-        send_welcome(user, member_number)
+            Member.objects.create(
+                user=user,
+                member_number=member_number,
+                national_id=data["national_id"],
+                phone_number=data["phone_number"],
+                gender=data["gender"],
+                date_of_birth=data["date_of_birth"],
+                county=data["county"],
+                address=data["address"],
+            )
 
-    return Response({"message": "Registration successful", "member_number": member_number})
+            # ── ID Verification ──────────────────────────────────────────
+            id_check = verify_national_id(
+                user,
+                data["national_id"],
+                data.get("first_name", ""),
+                data.get("last_name", ""),
+            )
+
+            if not id_check["approved"]:
+                raise ValueError(id_check["message"])
+
+            Notification.send(user, "Welcome to SACCO!", f"Your member number is {member_number}.", "success", "/dashboard")
+            AuditLog.log(user, "register", f"Member {member_number}", {"username": user.username}, request)
+            send_welcome(user, member_number)
+
+    except ValueError as exc:
+        return Response({"error": str(exc)}, status=400)
+
+    return Response({
+        "message":       "Registration successful",
+        "member_number": member_number,
+        "id_status":     id_check.get("status", "pending"),
+        "id_message":    id_check.get("message", ""),
+    })
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -68,6 +68,10 @@ ROOT_URLCONF    = "sacco.urls"
 WSGI_APPLICATION = "sacco.wsgi.application"
 AUTH_USER_MODEL  = "accounts.User"
 
+AUTHENTICATION_BACKENDS = [
+    "accounts.backends.CaseInsensitiveModelBackend",
+]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Templates
 # ─────────────────────────────────────────────────────────────────────────────

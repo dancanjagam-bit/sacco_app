@@ -169,3 +169,45 @@ class AuditLog(models.Model):
             actor=actor, action=action, target=target,
             details=details or {}, ip_address=ip,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🪪 ID Verification Record
+# ─────────────────────────────────────────────────────────────────────────────
+class IDVerification(models.Model):
+    """
+    Tracks the status of government ID verification for a member.
+    Supports manual verification by staff and automated KYC via third-party providers.
+    """
+    PROVIDER_CHOICES = [
+        ("manual",          "Manual Verification by Staff"),
+        ("smile_identity",  "Smile Identity (KYC API)"),
+        ("iprs_stub",       "IPRS Verification (Stub — not live)"),
+    ]
+    STATUS_CHOICES = [
+        ("pending",   "Pending Verification"),
+        ("verified",  "Verified"),
+        ("failed",    "Verification Failed"),
+        ("flagged",   "Flagged for Review"),
+    ]
+
+    user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name="id_verification")
+    national_id     = models.CharField(max_length=20)
+    provider        = models.CharField(max_length=30, choices=PROVIDER_CHOICES, default="manual")
+    status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    # Provider response (raw JSON from the KYC API or manual notes)
+    provider_response = models.JSONField(default=dict, blank=True)
+    failure_reason   = models.TextField(blank=True, default="")
+
+    # Who verified manually
+    verified_by      = models.ForeignKey(
+        User, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="verifications_done",
+    )
+    verified_at      = models.DateTimeField(null=True, blank=True)
+    created_at       = models.DateTimeField(auto_now_add=True)
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} ID {self.national_id} — {self.status}"
