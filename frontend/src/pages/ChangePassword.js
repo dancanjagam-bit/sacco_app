@@ -15,13 +15,47 @@ function ChangePassword() {
     confirm_password: "",
   });
 
-  const [message, setMessage]   = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [showOld,     setShowOld]     = useState(false);
+  const [showNew,     setShowNew]     = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [message, setMessage] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
     setMessage(null);
   };
+
+  const pw = form.new_password;
+  const pwChecks = {
+    length: pw.length >= 8,
+    letter: /[A-Za-z]/.test(pw),
+    number: /\d/.test(pw),
+  };
+  const allGood = pwChecks.length && pwChecks.letter && pwChecks.number && form.new_password === form.confirm_password;
+
+  const pwField = (label, name, showState, placeholder) => (
+    <div className="auth-field">
+      <label>{label}</label>
+      <div className="auth-input-wrap">
+        <span className="auth-input-icon">🔒</span>
+        <input
+          type={showState[0] ? "text" : "password"}
+          name={name}
+          value={form[name]}
+          onChange={handleChange}
+          placeholder={placeholder}
+          required
+          className="auth-input-with-icon"
+          style={{ paddingRight: "48px" }}
+        />
+        <button type="button" onClick={() => showState[1](!showState[0])} className="auth-toggle-pw" tabIndex={-1}>
+          {showState[0] ? "🙈" : "👁️"}
+        </button>
+      </div>
+    </div>
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +77,6 @@ function ChangePassword() {
       await api.post("change-password/", form);
       setMessage({ type: "success", text: "Password changed successfully! Redirecting..." });
       setForm({ old_password: "", new_password: "", confirm_password: "" });
-
       setTimeout(() => navigate("/dashboard"), 2000);
     } catch (err) {
       const data = err.response?.data;
@@ -51,8 +84,8 @@ function ChangePassword() {
         setMessage({ type: "error", text: data.error });
       } else if (data) {
         const msg = Object.entries(data)
-          .map(([f, e]) => `${f.replace(/_/g," ")}: ${Array.isArray(e) ? e[0] : e}`)
-          .join(" • ");
+          .map(([f, e]) => `${f.replace(/_/g, " ")}: ${Array.isArray(e) ? e[0] : e}`)
+          .join(" - ");
         setMessage({ type: "error", text: msg });
       } else {
         setMessage({ type: "error", text: "Failed to change password." });
@@ -66,93 +99,51 @@ function ChangePassword() {
     <Layout>
       <div style={{ maxWidth: "480px" }}>
         <h2 className="section-title">🔒 Change Password</h2>
-        <p className="section-subtitle">
-          Update your account password. You'll need your current password.
-        </p>
+        <p className="section-subtitle">Update your account password securely</p>
 
         {message && (
-          <div className={`alert alert-${message.type}`}>
+          <div className={`alert alert-${message.type}`} style={{ marginBottom: "16px" }}>
             {message.text}
           </div>
         )}
 
-        <div style={{
-          background: "#fff",
-          borderRadius: "12px",
-          padding: "28px",
-          boxShadow: "var(--shadow)",
-        }}>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
-                Current Password
-              </label>
-              <input
-                type="password"
-                name="old_password"
-                value={form.old_password}
-                onChange={handleChange}
-                placeholder="Enter current password"
-                required
-                className="amount-input"
-                style={{ width: "100%" }}
-              />
-            </div>
+        <div style={{ background: "#fff", borderRadius: "16px", padding: "28px", boxShadow: "var(--shadow)" }}>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+            {pwField("Current Password", "old_password", [showOld, setShowOld], "Enter current password")}
+            {pwField("New Password", "new_password", [showNew, setShowNew], "At least 8 characters")}
 
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
-                New Password
-              </label>
-              <input
-                type="password"
-                name="new_password"
-                value={form.new_password}
-                onChange={handleChange}
-                placeholder="At least 8 characters"
-                required
-                className="amount-input"
-                style={{ width: "100%" }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                name="confirm_password"
-                value={form.confirm_password}
-                onChange={handleChange}
-                placeholder="Repeat new password"
-                required
-                className="amount-input"
-                style={{ width: "100%" }}
-              />
-            </div>
-
-            {/* Password strength hint */}
-            {form.new_password && (
-              <div style={{ fontSize: "12px", color: form.new_password.length >= 8 ? "#16a34a" : "#dc2626" }}>
-                {form.new_password.length >= 8
-                  ? "✅ Password length OK"
-                  : `⚠️ ${8 - form.new_password.length} more character(s) needed`}
+            {/* Live strength checklist */}
+            {pw.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", margin: "-8px 0" }}>
+                {[
+                  ["length", "8+ characters"],
+                  ["letter", "Contains a letter"],
+                  ["number", "Contains a number"],
+                ].map(([k, l]) => (
+                  <span key={k} style={{ color: pwChecks[k] ? "#16a34a" : "#94a3b8" }}>
+                    {pwChecks[k] ? "✅" : "○"} {l}
+                  </span>
+                ))}
               </div>
             )}
+
+            {pwField("Confirm New Password", "confirm_password", [showConfirm, setShowConfirm], "Repeat new password")}
 
             {form.confirm_password && (
-              <div style={{ fontSize: "12px", color: form.new_password === form.confirm_password ? "#16a34a" : "#dc2626" }}>
+              <span style={{ fontSize: "13px", color: form.new_password === form.confirm_password ? "#16a34a" : "#dc2626" }}>
                 {form.new_password === form.confirm_password ? "✅ Passwords match" : "⚠️ Passwords do not match"}
-              </div>
+              </span>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="auth-button"
-              style={{ marginTop: "8px" }}
-            >
-              {loading ? "Updating..." : "🔒 Change Password"}
+            <button type="submit" disabled={loading || !allGood} className="auth-button" style={{ marginTop: "4px" }}>
+              {loading ? (
+                <>
+                  <span className="auth-spinner" />
+                  Updating...
+                </>
+              ) : (
+                "🔒 Change Password"
+              )}
             </button>
           </form>
         </div>

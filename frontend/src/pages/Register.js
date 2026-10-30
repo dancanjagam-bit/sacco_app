@@ -65,6 +65,9 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [step,    setStep]    = useState(1);
 
+  const [showPw,   setShowPw]   = useState(false);
+  const [showConf, setShowConf] = useState(false);
+
   const set = (name) => (e) => {
     setForm(prev => ({ ...prev, [name]: e.target.value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
@@ -317,7 +320,11 @@ export default function Register() {
 
               <div>
                 <label style={labelStyle()}>Password <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.password)} type="password" name="password" value={form.password} onChange={set("password")} placeholder="At least 8 characters" autoComplete="new-password" />
+                <div className="auth-input-wrap">
+                  <span className="auth-input-icon">🔒</span>
+                  <input style={inputStyle(errors.password)} type={showPw ? "text" : "password"} name="password" value={form.password} onChange={set("password")} placeholder="At least 8 characters" autoComplete="new-password" className="auth-input-with-icon" />
+                  <button type="button" onClick={() => setShowPw(!showPw)} className="auth-toggle-pw" tabIndex={-1}>{showPw ? "🙈" : "👁️"}</button>
+                </div>
                 {pw.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "3px", marginTop: "6px", fontSize: "12px" }}>
                     {[["length", "8+ characters"], ["letter", "Contains a letter"], ["number", "Contains a number"]].map(([k, l]) => (
@@ -332,7 +339,11 @@ export default function Register() {
 
               <div>
                 <label style={labelStyle()}>Confirm Password <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.confirm_password)} type="password" name="confirm_password" value={form.confirm_password} onChange={set("confirm_password")} placeholder="Repeat password" autoComplete="new-password" />
+                <div className="auth-input-wrap">
+                  <span className="auth-input-icon">🔒</span>
+                  <input style={inputStyle(errors.confirm_password)} type={showConf ? "text" : "password"} name="confirm_password" value={form.confirm_password} onChange={set("confirm_password")} placeholder="Repeat password" autoComplete="new-password" className="auth-input-with-icon" />
+                  <button type="button" onClick={() => setShowConf(!showConf)} className="auth-toggle-pw" tabIndex={-1}>{showConf ? "🙈" : "👁️"}</button>
+                </div>
                 {form.confirm_password.length > 0 && (
                   <span style={{ fontSize: "12px", marginTop: "4px", display: "block", color: form.password === form.confirm_password ? "#16a34a" : "#dc2626" }}>
                     {form.password === form.confirm_password ? "✅ Passwords match" : "⚠️ Passwords do not match"}
