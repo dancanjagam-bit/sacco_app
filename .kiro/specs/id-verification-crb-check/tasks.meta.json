@@ -1,0 +1,513 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add `id_document` FileField and `ocr_result` JSONField to `IDVerification` in `accounts/models.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376519795
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376531514
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376947762
+      }
+    ],
+    "1.2 Add `selfie` FileField and `face_match_score` FloatField to `IDVerification` in `accounts/models.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520076
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376535851
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376955244
+      }
+    ],
+    "1.3 Add `\"flagged\"` to `Loan.STATUS_CHOICES` in `core/models.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520176
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376541478
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376961721
+      }
+    ],
+    "1.4 Create `CRBCheck` model in `core/models.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520287
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376546987
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376968401
+      }
+    ],
+    "1.5 Add new `AuditLog.ACTION_CHOICES` entries in `accounts/models.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520418
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376553313
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376975043
+      }
+    ],
+    "1.6 Generate and apply Django migrations": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520516
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376981730
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377032637
+      }
+    ],
+    "2.1 Create `accounts/services/__init__.py` (empty) and `accounts/services/file_validator.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520660
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377040895
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377498977
+      }
+    ],
+    "2.3 Create `accounts/services/ocr_pipeline.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376520833
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377047273
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377505941
+      }
+    ],
+    "2.5 Create `accounts/services/name_matcher.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521057
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377053800
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377532333
+      }
+    ],
+    "3.1 Create `accounts/services/face_verification_service.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521234
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377567983
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377722242
+      }
+    ],
+    "3.3 Create `accounts/services/id_verification_service.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521409
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377754566
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379913021
+      }
+    ],
+    "4.1 Create `core/services/__init__.py` (empty) and `core/services/crb_client.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521579
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377059074
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377539069
+      }
+    ],
+    "4.3 Create `core/services/crb_service.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521760
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377762154
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379920500
+      }
+    ],
+    "5.1 Extend `RegistrationSerializer` in `accounts/serializers.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376521950
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379956867
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380404020
+      }
+    ],
+    "6.1 Update the loan application view in `core/views.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522143
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380441902
+      }
+    ],
+    "7.1 Add ID verification admin endpoints in `accounts/views.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522332
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379963802
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380414437
+      }
+    ],
+    "7.2 Add protected media view in `accounts/views.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522556
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379969576
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380420616
+      }
+    ],
+    "7.3 Add CRB check admin endpoints in `core/views.py`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522672
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379976933
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380429652
+      }
+    ],
+    "8. Checkpoint — backend integration": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522739
+      }
+    ],
+    "9.1 Create `frontend/src/components/IDDocumentUpload.js`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376522835
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377769781
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379927787
+      }
+    ],
+    "9.2 Create `frontend/src/components/SelfieCapture.js`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523020
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377781173
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379935080
+      }
+    ],
+    "9.3 Create `frontend/src/components/VerificationStatusBadge.js`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523199
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377788072
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379943205
+      }
+    ],
+    "10.1 Update `frontend/src/pages/Register.js` to include ID document upload and selfie capture": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523340
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380452137
+      }
+    ],
+    "11.1 Create `frontend/src/pages/AdminIDVerifications.js`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523474
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380466481
+      }
+    ],
+    "11.2 Create `frontend/src/pages/AdminCRBChecks.js`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523648
+      }
+    ],
+    "11.3 Add routes and sidebar links for new admin pages": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376523829
+      }
+    ],
+    "12. Checkpoint — frontend integration": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376524013
+      }
+    ],
+    "13.1 Append CRB, OCR, and face verification env var documentation to `.env.example`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376524185
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377794730
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379950712
+      }
+    ],
+    "14.1 Add `react-webcam` to `frontend/package.json` and install": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376524373
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377064467
+      },
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377546687
+      }
+    ],
+    "15. Final checkpoint — full test suite": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793376524569
+      }
+    ],
+    "1. Extend data models and run migrations": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377032738
+      }
+    ],
+    "2. Build backend services — file validation and OCR pipeline": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377532575
+      }
+    ],
+    "14. Install `react-webcam` npm dependency": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793377546864
+      }
+    ],
+    "3. Build backend services — face verification and ID verification orchestrator": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379913269
+      }
+    ],
+    "4. Build backend services — CRB pipeline": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379920658
+      }
+    ],
+    "9. React frontend — shared components": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379943523
+      }
+    ],
+    "13. Add new env vars to `.env.example`": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793379950983
+      }
+    ],
+    "5. Extend registration serializer and integrate new ID verification service": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380404112
+      }
+    ],
+    "7. New admin endpoints": [
+      {
+        "executionId": "3b6409ed-9a76-42d2-a86b-1eab7c5a8bda",
+        "chatSessionId": "sess_b3e3b6ff-9c9b-4b3e-ad61-f2916b9db9b1",
+        "timestamp": 1793380429840
+      }
+    ]
+  }
+}

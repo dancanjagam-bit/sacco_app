@@ -57,6 +57,10 @@ function Sidebar() {
               {link("/admin/exit-requests","🚪", "Exit Requests")}
               {link("/admin/audit",        "🔍", "Financial Audit")}
 
+              <p className="sidebar-section-label">Compliance</p>
+              {link("/admin/id-verifications", "🪪", "ID Verifications")}
+              {link("/admin/crb-checks",       "🔍", "CRB Checks")}
+
               {isSuperAdmin && (
                 <>
                   <p className="sidebar-section-label">Administration</p>

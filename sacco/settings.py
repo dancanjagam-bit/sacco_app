@@ -255,9 +255,35 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF    = True
 
 # ─────────────────────────────────────────────────────────────────────────────
+# File upload limits
+# ─────────────────────────────────────────────────────────────────────────────
+ID_DOC_MAX_MB = int(os.getenv("ID_DOC_MAX_MB", "5"))
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Africa's Talking (SMS)
 # ─────────────────────────────────────────────────────────────────────────────
 AT_USERNAME = os.getenv("AT_USERNAME", "sandbox")
 AT_API_KEY  = os.getenv("AT_API_KEY",  "")
 # Set AT_USERNAME to your real username and AT_API_KEY to your API key in .env
 # For sandbox testing: AT_USERNAME=sandbox, AT_API_KEY=your-sandbox-key
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ID Verification — name matching
+# ─────────────────────────────────────────────────────────────────────────────
+NAME_MATCH_THRESHOLD = int(os.getenv("NAME_MATCH_THRESHOLD", "75"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CRB (Credit Reference Bureau)
+# ─────────────────────────────────────────────────────────────────────────────
+CRB_PROVIDER             = os.getenv("CRB_PROVIDER", "stub")
+CRB_API_KEY              = os.getenv("CRB_API_KEY", "")
+CRB_API_URL              = os.getenv("CRB_API_URL", "")
+CRB_FLAG_SCORE_THRESHOLD = int(os.getenv("CRB_FLAG_SCORE_THRESHOLD", "500"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Smile Identity — face / biometric verification
+# ─────────────────────────────────────────────────────────────────────────────
+SMILE_IDENTITY_API_KEY    = os.getenv("SMILE_IDENTITY_API_KEY", "")
+SMILE_IDENTITY_PARTNER_ID = os.getenv("SMILE_IDENTITY_PARTNER_ID", "")
+SMILE_IDENTITY_ENV        = os.getenv("SMILE_IDENTITY_ENV", "sandbox")
+FACE_MATCH_THRESHOLD      = int(os.getenv("FACE_MATCH_THRESHOLD", "70"))

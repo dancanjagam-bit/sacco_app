@@ -143,6 +143,13 @@ class AuditLog(models.Model):
         # System
         ("export",          "Data Exported"),
         ("other",           "Other"),
+        # ID Verification & CRB
+        ("id_verify_submit", "ID Verification Submitted"),
+        ("id_verify_review", "ID Verification Reviewed"),
+        ("crb_check_run",    "CRB Check Run"),
+        ("crb_override",     "CRB Flagged Loan Override"),
+        ("loan_flagged",     "Loan Flagged by CRB"),
+        ("face_verify",      "Face Verification Run"),
     ]
 
     actor      = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_actions")
@@ -199,6 +206,14 @@ class IDVerification(models.Model):
     # Provider response (raw JSON from the KYC API or manual notes)
     provider_response = models.JSONField(default=dict, blank=True)
     failure_reason   = models.TextField(blank=True, default="")
+
+    # Uploaded document files
+    id_document      = models.FileField(upload_to="id_documents/", null=True, blank=True)
+    ocr_result       = models.JSONField(default=dict, blank=True)  # raw extracted text and parsed fields
+
+    # Selfie / face verification
+    selfie           = models.FileField(upload_to="selfies/", null=True, blank=True)
+    face_match_score = models.FloatField(null=True, blank=True)
 
     # Who verified manually
     verified_by      = models.ForeignKey(

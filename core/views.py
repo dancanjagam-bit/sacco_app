@@ -196,9 +196,24 @@ def apply_loan(request):
         note=f"Loan #{loan.id} application",
     )
 
+    # ── CRB Check ────────────────────────────────────────────────────────────
+    try:
+        from core.services.crb_service import CRBService
+        crb_check = CRBService().run_check(loan)
+        crb_status = crb_check.status
+        flag_reason = loan.remarks if loan.status == "flagged" else ""
+    except Exception as crb_exc:
+        import logging
+        logging.getLogger(__name__).error("CRB check failed: %s", crb_exc)
+        crb_status  = "error"
+        flag_reason = ""
+
     return Response({
         "message": "Loan application submitted successfully.",
         "loan_id":       loan.id,
+        "loan_status":   loan.status,          # may be "flagged"
+        "crb_status":    crb_status,
+        "flag_reason":   flag_reason,
         "tier":          report["tier_label"],
         "interest_rate": float(interest),
         "max_loan":      float(report["max_loan"]),
@@ -1856,3 +1871,104 @@ def audit_report(request):
         "by_rule":    by_rule,
         "generated_at": timezone.now(),
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔍 CRB Check admin endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def admin_crb_checks(request):
+    """List all CRBCheck records, filterable by status and loan_id."""
+    from .models import CRBCheck
+    qs = CRBCheck.objects.select_related("loan", "member").order_by("-checked_at")
+    status_filter  = request.query_params.get("status")
+    loan_filter    = request.query_params.get("loan_id")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if loan_filter:
+        qs = qs.filter(loan_id=loan_filter)
+    data = []
+    for c in qs:
+        data.append({
+            "id":                c.pk,
+            "loan_id":           c.loan_id,
+            "loan_amount":       float(c.loan.amount),
+            "member_username":   c.member.username,
+            "member_name":       c.member.get_full_name(),
+            "provider":          c.provider,
+            "status":            c.status,
+            "score":             c.score,
+            "active_loans_count":c.active_loans_count,
+            "checked_at":        c.checked_at,
+        })
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def admin_crb_check_detail(request, check_id):
+    """Retrieve a single CRBCheck record with raw_response."""
+    from .models import CRBCheck
+    from django.shortcuts import get_object_or_404
+    c = get_object_or_404(CRBCheck, pk=check_id)
+    return Response({
+        "id":                c.pk,
+        "loan_id":           c.loan_id,
+        "loan_amount":       float(c.loan.amount),
+        "loan_status":       c.loan.status,
+        "member_username":   c.member.username,
+        "member_name":       c.member.get_full_name(),
+        "provider":          c.provider,
+        "status":            c.status,
+        "score":             c.score,
+        "active_loans_count":c.active_loans_count,
+        "raw_response":      c.raw_response,
+        "checked_at":        c.checked_at,
+        "override_by":       c.override_by.username if c.override_by else None,
+        "override_at":       c.override_at,
+        "override_notes":    c.override_notes,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def admin_crb_override(request, check_id):
+    """Override a flagged CRBCheck — set loan to approved and record override details."""
+    from .models import CRBCheck
+    from django.shortcuts import get_object_or_404
+    from accounts.models import Notification, AuditLog
+
+    c = get_object_or_404(CRBCheck, pk=check_id)
+    notes = request.data.get("notes", "")
+
+    if c.loan.status not in ("flagged",):
+        return Response({"error": "Only flagged loans can be overridden."}, status=400)
+
+    c.loan.status = "approved"
+    c.loan.save(update_fields=["status"])
+
+    c.override_by    = request.user
+    c.override_at    = timezone.now()
+    c.override_notes = notes
+    c.save(update_fields=["override_by", "override_at", "override_notes"])
+
+    Notification.send(
+        c.member,
+        title="Loan Application Approved",
+        message=f"Your loan application of KES {c.loan.amount:,} has been approved by a loan officer.",
+        ntype="success",
+    )
+    AuditLog.log(
+        actor=request.user,
+        action="crb_override",
+        target=f"Loan #{c.loan_id}",
+        details={
+            "crb_check_id": c.pk,
+            "loan_id": c.loan_id,
+            "override_by_username": request.user.username,
+            "notes": notes,
+        },
+        request=request,
+    )
+    return Response({"message": "Loan approved. CRB override recorded.", "loan_id": c.loan_id})

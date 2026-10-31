@@ -5,3 +5,9 @@ django-cors-headers==4.9.0
 openpyxl==3.1.5
 python-dateutil==2.9.0.post0
 django-ratelimit==4.1.0
+thefuzz==0.22.1
+pytesseract==0.3.13
+Pillow==11.2.1
+pdfplumber==0.11.4
+python-magic==0.4.27
+python-magic-bin==0.4.14

@@ -32,9 +32,11 @@ def _make_user(username, email, national_id=None):
         username=username, password="TestPass1", email=email,
         first_name="Audit", last_name="Test",
     )
+    # Use a unique member number derived from the primary key to avoid collisions
+    # We create the user first so we have a pk, then create the Member
     Member.objects.create(
         user=user,
-        member_number=f"AUD{username[:5].upper()}",
+        member_number=f"AUD{user.pk:06d}",
         national_id=national_id,
         phone_number="0712345678",
         gender="male",

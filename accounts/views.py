@@ -16,7 +16,7 @@ from sacco.notifications import (
     send_otp as deliver_otp,
     send_welcome,
 )
-from .id_verification import verify_national_id
+from accounts.services.id_verification_service import run_id_verification
 
 User = get_user_model()
 
@@ -172,15 +172,19 @@ def register(request):
             )
 
             # ── ID Verification ──────────────────────────────────────────
-            id_check = verify_national_id(
-                user,
-                data["national_id"],
-                data.get("first_name", ""),
-                data.get("last_name", ""),
+            id_document_file = request.FILES.get("id_document")
+            selfie_file      = request.FILES.get("selfie")
+            id_check = run_id_verification(
+                user=user,
+                national_id=data["national_id"],
+                first_name=data.get("first_name", ""),
+                last_name=data.get("last_name", ""),
+                id_document_file=id_document_file,
+                selfie_file=selfie_file,
             )
 
-            if not id_check["approved"]:
-                raise ValueError(id_check["message"])
+            if id_check.get("approved") is False:
+                raise ValueError(id_check.get("message", "ID verification failed."))
 
             Notification.send(user, "Welcome to SACCO!", f"Your member number is {member_number}.", "success", "/dashboard")
             AuditLog.log(user, "register", f"Member {member_number}", {"username": user.username}, request)
@@ -615,3 +619,134 @@ def reset_password(request):
 
     AuditLog.log(user, "password_reset", request=request)
     return Response({"message": "Password reset successfully. You can now log in."})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🪪 ID Verification admin endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def admin_id_verifications(request):
+    """List all IDVerification records with optional status filter."""
+    from .models import IDVerification
+    status_filter = request.query_params.get("status")
+    qs = IDVerification.objects.select_related("user").order_by("-created_at")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    data = []
+    for v in qs:
+        data.append({
+            "id":          v.pk,
+            "user_id":     v.user_id,
+            "username":    v.user.username,
+            "full_name":   v.user.get_full_name(),
+            "national_id": v.national_id,
+            "status":      v.status,
+            "provider":    v.provider,
+            "created_at":  v.created_at,
+            "verified_at": v.verified_at,
+        })
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def admin_id_verification_detail(request, verification_id):
+    """Retrieve a single IDVerification record with OCR result, file URLs, and face match score."""
+    from .models import IDVerification
+    from django.shortcuts import get_object_or_404
+    v = get_object_or_404(IDVerification, pk=verification_id)
+    return Response({
+        "id":               v.pk,
+        "user_id":          v.user_id,
+        "username":         v.user.username,
+        "full_name":        v.user.get_full_name(),
+        "national_id":      v.national_id,
+        "status":           v.status,
+        "provider":         v.provider,
+        "failure_reason":   v.failure_reason,
+        "ocr_result":       v.ocr_result,
+        "provider_response":v.provider_response,
+        "face_match_score": v.face_match_score,
+        "id_document_url":  request.build_absolute_uri(f"/api/media/protected/{v.id_document.name}") if v.id_document else None,
+        "selfie_url":       request.build_absolute_uri(f"/api/media/protected/{v.selfie.name}") if v.selfie else None,
+        "created_at":       v.created_at,
+        "verified_at":      v.verified_at,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def admin_id_verification_review(request, verification_id):
+    """Staff manually set IDVerification status with notes."""
+    from .models import IDVerification
+    from django.shortcuts import get_object_or_404
+    v = get_object_or_404(IDVerification, pk=verification_id)
+    new_status = request.data.get("status")
+    notes      = request.data.get("notes", "")
+    allowed    = ("verified", "failed", "flagged", "pending")
+    if new_status not in allowed:
+        return Response({"error": f"status must be one of {allowed}"}, status=400)
+    old_status = v.status
+    v.status = new_status
+    if new_status == "verified":
+        v.verified_by = request.user
+        v.verified_at = timezone.now()
+    v.save()
+    Notification.send(
+        v.user,
+        title="Identity Verification Update",
+        message=f"Your ID verification status has been updated to '{new_status}' by SACCO staff.",
+        ntype="success" if new_status == "verified" else "warning",
+    )
+    AuditLog.log(
+        actor=request.user,
+        action="id_verify_review",
+        target=f"IDVerification #{v.pk}",
+        details={"idverification_id": v.pk, "prev_status": old_status, "new_status": new_status, "notes": notes},
+        request=request,
+    )
+    return Response({"message": f"Status updated to '{new_status}'.", "id": v.pk, "status": new_status})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔒 Protected media view — serves selfie and id_document files securely
+# ─────────────────────────────────────────────────────────────────────────────
+from rest_framework.views import APIView
+from django.http import FileResponse
+from django.conf import settings as django_settings
+import os
+
+class ProtectedMediaView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, path):
+        from .models import IDVerification
+        from django.shortcuts import get_object_or_404
+        from rest_framework.exceptions import PermissionDenied
+
+        # Find the IDVerification record that owns this file
+        verification = None
+        for v in IDVerification.objects.select_related("user").all():
+            if (v.id_document and v.id_document.name == path) or \
+               (v.selfie and v.selfie.name == path):
+                verification = v
+                break
+
+        if verification is None:
+            return Response({"error": "File not found."}, status=404)
+
+        is_owner = request.user == verification.user
+        is_admin = (
+            getattr(request.user, "is_admin", False)
+            or request.user.is_staff
+            or request.user.is_superuser
+        )
+        if not (is_owner or is_admin):
+            raise PermissionDenied("You do not have permission to access this file.")
+
+        full_path = os.path.join(django_settings.MEDIA_ROOT, path)
+        if not os.path.exists(full_path):
+            return Response({"error": "File not found on disk."}, status=404)
+
+        return FileResponse(open(full_path, "rb"))

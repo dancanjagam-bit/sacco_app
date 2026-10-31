@@ -33,6 +33,7 @@ class Loan(models.Model):
         ("approved", "Approved"),
         ("rejected", "Rejected"),
         ("repaid",   "Repaid"),
+        ("flagged",  "Flagged for CRB Review"),
     ]
 
     PURPOSE_CHOICES = [
@@ -395,3 +396,52 @@ class AuditFinding(models.Model):
 
     def __str__(self):
         return f"[{self.severity.upper()}] {self.title}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🔎 CRB Check — Credit Reference Bureau result per loan application
+# ─────────────────────────────────────────────────────────────────────────────
+class CRBCheck(models.Model):
+    PROVIDER_CHOICES = [
+        ("transunion", "TransUnion Kenya"),
+        ("metropol",   "Metropol"),
+        ("stub",       "Stub"),
+    ]
+    STATUS_CHOICES = [
+        ("pending",        "Pending"),
+        ("clear",          "Clear"),
+        ("flagged",        "Flagged"),
+        ("error",          "Error"),
+        ("not_configured", "Not Configured"),
+    ]
+
+    loan              = models.OneToOneField(
+        Loan, on_delete=models.CASCADE, related_name="crb_check",
+    )
+    member            = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="crb_checks",
+    )
+    provider          = models.CharField(
+        max_length=20, choices=PROVIDER_CHOICES, blank=True, default="",
+    )
+    status            = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="pending",
+    )
+    score             = models.IntegerField(null=True, blank=True)
+    active_loans_count = models.IntegerField(default=0)
+    raw_response      = models.JSONField(default=dict, blank=True)
+    checked_at        = models.DateTimeField(auto_now_add=True)
+
+    # Officer override fields
+    override_by       = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="crb_overrides",
+    )
+    override_at       = models.DateTimeField(null=True, blank=True)
+    override_notes    = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-checked_at"]
+
+    def __str__(self):
+        return f"CRBCheck — Loan #{self.loan_id} ({self.provider or 'n/a'}) → {self.status}"

@@ -126,6 +126,10 @@ class RegistrationSerializer(serializers.Serializer):
     recovery_email = serializers.EmailField(required=False, allow_blank=True)
     recovery_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
+    # File uploads for ID verification
+    id_document = serializers.FileField(required=False, allow_null=True)
+    selfie      = serializers.FileField(required=False, allow_null=True)
+
     # ── Field-level validators ────────────────────────────────────────────
     def validate_username(self, v):
         if User.objects.filter(username=v).exists():
@@ -166,6 +170,26 @@ class RegistrationSerializer(serializers.Serializer):
         if v:
             return normalise_kenyan_phone(v)
         return v
+
+    def validate_id_document(self, file):
+        if file:
+            from accounts.services.file_validator import validate_id_document
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_id_document(file)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.messages)
+        return file
+
+    def validate_selfie(self, file):
+        if file:
+            from accounts.services.file_validator import validate_selfie
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_selfie(file)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.messages)
+        return file
 
     # ── Cross-field ───────────────────────────────────────────────────────
     def validate(self, attrs):

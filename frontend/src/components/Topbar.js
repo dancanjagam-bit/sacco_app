@@ -143,7 +143,7 @@ function Topbar({ user }) {
                     <p style={{ margin: 0, fontSize: "12px", color: "#94a3b8" }}>{n.message.slice(0, 60)}{n.message.length > 60 ? "..." : ""}</p>
                   </div>
                   {!n.is_read && (
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#2563eb", marginTop: "4px", flexShrink: 0 }} />
+                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#4f46e5", marginTop: "4px", flexShrink: 0 }} />
                   )}
                 </div>
               ))}

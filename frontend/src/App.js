@@ -31,6 +31,8 @@ import AdminSettings  from "./pages/AdminSettings";
 import AdminAssets    from "./pages/AdminAssets";
 import AdminExitRequests from "./pages/AdminExitRequests";
 import AdminAudit     from "./pages/AdminAudit";
+import AdminIDVerifications from "./pages/AdminIDVerifications";
+import AdminCRBChecks from "./pages/AdminCRBChecks";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -81,6 +83,8 @@ function App() {
           <Route path="/admin/assets"   element={<AdminRoute><AdminAssets /></AdminRoute>} />
           <Route path="/admin/exit-requests" element={<AdminRoute><AdminExitRequests /></AdminRoute>} />
           <Route path="/admin/audit"        element={<AdminRoute><AdminAudit /></AdminRoute>} />
+          <Route path="/admin/id-verifications" element={<AdminRoute><AdminIDVerifications /></AdminRoute>} />
+          <Route path="/admin/crb-checks"       element={<AdminRoute><AdminCRBChecks /></AdminRoute>} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -34,6 +34,9 @@ from .views import (
     audit_findings,
     review_finding,
     audit_report,
+    admin_crb_checks,
+    admin_crb_check_detail,
+    admin_crb_override,
 )
 
 urlpatterns = [
@@ -94,4 +97,9 @@ urlpatterns = [
     path("admin/audit/findings/",            audit_findings),
     path("admin/audit/findings/<int:finding_id>/review/", review_finding),
     path("admin/audit/report/",              audit_report),
+
+    # CRB checks
+    path("admin/crb-checks/",                        admin_crb_checks,       name="admin-crb-checks"),
+    path("admin/crb-checks/<int:check_id>/",         admin_crb_check_detail, name="admin-crb-check-detail"),
+    path("admin/crb-checks/<int:check_id>/override/",admin_crb_override,     name="admin-crb-override"),
 ]

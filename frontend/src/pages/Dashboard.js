@@ -48,21 +48,22 @@ export default function Dashboard() {
         <div>
           {/* ── Welcome banner ── */}
           <div style={{
-            background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #2563eb 100%)",
-            borderRadius: "16px",
+            background: "linear-gradient(135deg, #0b1437 0%, #1e1b4b 45%, #3730a3 80%, #4f46e5 100%)",
+            borderRadius: "20px",
             padding: "28px 32px",
             marginBottom: "24px",
             color: "#fff",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            boxShadow: "0 8px 32px rgba(37,99,235,.25)",
+            boxShadow: "0 8px 40px rgba(79,70,229,.3)",
             overflow: "hidden",
             position: "relative",
           }}>
             {/* Background decoration */}
-            <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "200px", height: "200px", borderRadius: "50%", background: "rgba(255,255,255,.05)" }} />
-            <div style={{ position: "absolute", bottom: "-60px", right: "120px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,.04)" }} />
+            <div style={{ position: "absolute", top: "-50px", right: "-50px", width: "220px", height: "220px", borderRadius: "50%", background: "rgba(129,140,248,.08)" }} />
+            <div style={{ position: "absolute", bottom: "-70px", right: "130px", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(52,211,153,.06)" }} />
+            <div style={{ position: "absolute", top: "50%", left: "40%", width: "1px", height: "80%", background: "rgba(255,255,255,.04)", transform: "translateY(-50%) rotate(30deg)" }} />
 
             <div style={{ position: "relative" }}>
               <p style={{ margin: "0 0 4px", fontSize: "14px", color: "rgba(255,255,255,.65)", fontWeight: "500" }}>

@@ -14,6 +14,10 @@ from .views import (
     notification_read,
     notification_read_all,
     audit_log,
+    admin_id_verifications,
+    admin_id_verification_detail,
+    admin_id_verification_review,
+    ProtectedMediaView,
 )
 
 urlpatterns = [
@@ -38,4 +42,12 @@ urlpatterns = [
 
     # Audit log
     path("admin/audit-log/", audit_log, name="audit-log"),
+
+    # ID Verification admin
+    path("admin/id-verifications/", admin_id_verifications, name="admin-id-verifications"),
+    path("admin/id-verifications/<int:verification_id>/", admin_id_verification_detail, name="admin-id-verification-detail"),
+    path("admin/id-verifications/<int:verification_id>/review/", admin_id_verification_review, name="admin-id-verification-review"),
+
+    # Protected media
+    path("media/protected/<path:path>", ProtectedMediaView.as_view(), name="protected-media"),
 ]

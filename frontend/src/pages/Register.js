@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import "../styles/auth.css";
+import IDDocumentUpload from "../components/IDDocumentUpload";
+import SelfieCapture from "../components/SelfieCapture";
+import VerificationStatusBadge from "../components/VerificationStatusBadge";
 
 const COUNTIES = [
   "Mombasa","Kwale","Kilifi","Tana River","Lamu","Taita-Taveta",
@@ -67,6 +70,10 @@ export default function Register() {
 
   const [showPw,   setShowPw]   = useState(false);
   const [showConf, setShowConf] = useState(false);
+
+  const [idDocument, setIdDocument] = useState(null);
+  const [selfieFile, setSelfieFile]  = useState(null);
+  const [idStatus,   setIdStatus]    = useState(null);
 
   const set = (name) => (e) => {
     setForm(prev => ({ ...prev, [name]: e.target.value }));
@@ -138,7 +145,14 @@ export default function Register() {
     if (!validateStep3()) return;
     setLoading(true);
     try {
-      const res = await api.post("register/", form);
+      const formData = new FormData();
+      Object.entries(form).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") formData.append(k, v); });
+      if (idDocument) formData.append("id_document", idDocument);
+      if (selfieFile)  formData.append("selfie",      selfieFile);
+      const res = await api.post("register/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setIdStatus(res.data.id_status);
       setMessage({
         type: "success",
         text: `✅ Registration successful! Your Member Number is ${res.data.member_number}. Redirecting...`,
@@ -186,7 +200,7 @@ export default function Register() {
             <div key={n} style={{
               width: "32px", height: "32px", borderRadius: "50%",
               display: "flex", alignItems: "center", justifyContent: "center",
-              background: n <= step ? "#2563eb" : "#e2e8f0",
+              background: n <= step ? "#4f46e5" : "#e2e8f0",
               color: n <= step ? "#fff" : "#94a3b8",
               fontWeight: "700", fontSize: "14px", transition: "background .2s",
             }}>
@@ -200,6 +214,13 @@ export default function Register() {
 
         {message && (
           <div className={`auth-message ${message.type}`}>{message.text}</div>
+        )}
+
+        {idStatus && (
+          <div style={{ textAlign: "center", marginTop: "8px" }}>
+            <span style={{ fontSize: "13px", color: "#64748b" }}>ID Verification: </span>
+            <VerificationStatusBadge status={idStatus} />
+          </div>
         )}
 
         <div className="auth-form">
@@ -296,6 +317,13 @@ export default function Register() {
                 <label style={labelStyle()}>Recovery Phone</label>
                 <input style={inputStyle(errors.recovery_phone)} name="recovery_phone" value={form.recovery_phone} onChange={set("recovery_phone")} placeholder="e.g. 0733 000 000" />
                 {errors.recovery_phone && <p style={errStyle()}>{errors.recovery_phone}</p>}
+              </div>
+
+              <div style={{ marginTop: "12px" }}>
+                <IDDocumentUpload onChange={setIdDocument} disabled={loading} />
+              </div>
+              <div style={{ marginTop: "12px" }}>
+                <SelfieCapture onChange={setSelfieFile} disabled={loading} />
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
