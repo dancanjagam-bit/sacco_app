@@ -21,12 +21,29 @@ def run_id_verification(
     last_name: str,
     id_document_file=None,
     selfie_file=None,
+    date_of_birth=None,
 ) -> dict:
     from accounts.models import IDVerification, AuditLog, Notification, StaffProfile
     from accounts.services.file_validator import validate_id_document, validate_selfie
     from accounts.services.ocr_pipeline import run_ocr
     from accounts.services.name_matcher import match_names
-    from accounts.id_verification import call_smile_identity
+    from accounts.id_verification import (
+        _check_format, _check_structure, _check_kenyan_nid_range,
+        _check_duplicate, _check_dob_plausibility,
+        _call_smile_identity as call_smile_identity,
+    )
+
+    # ── Pre-flight: run all non-API layers immediately ────────────────────
+    for check_fn, args in [
+        (_check_format,            (national_id,)),
+        (_check_structure,         (national_id,)),
+        (_check_kenyan_nid_range,  (national_id,)),
+        (_check_duplicate,         (national_id, user)),
+        (_check_dob_plausibility,  (str(date_of_birth) if date_of_birth else "",)),
+    ]:
+        ok, reason = check_fn(*args)
+        if not ok:
+            return {"approved": False, "status": "failed", "message": reason, "ocr_result": {}}
 
     # Step 1: validate id_document
     if id_document_file:
@@ -63,7 +80,38 @@ def run_id_verification(
         except Exception as exc:
             logger.warning("OCR failed for user %s: %s", user.username, exc)
 
-    # Step 5: name matching
+    # Step 5: ID number cross-check (OCR vs form)
+    ocr_id_number = (ocr_result.get("fields") or {}).get("id_number")
+    if ocr_id_number and ocr_id_number.strip() != national_id.strip():
+        # The number on the uploaded document does not match what was typed
+        verification.status = "flagged"
+        verification.failure_reason = (
+            f"The ID number on your uploaded document ({ocr_id_number}) "
+            f"does not match the number you entered ({national_id}). "
+            "Please upload the correct ID card for the number you registered with, "
+            "or contact SACCO staff if you believe this is an error."
+        )
+        verification.ocr_result = ocr_result
+        verification.save()
+        AuditLog.log(actor=user, action="id_verify_submit",
+                     target=f"IDVerification #{verification.pk}",
+                     details={
+                         "idverification_id": verification.pk,
+                         "status": "flagged",
+                         "reason": "id_number_mismatch",
+                         "ocr_id": ocr_id_number,
+                         "submitted_id": national_id,
+                     })
+        _notify_member(user, "flagged")
+        _notify_staff(user, "flagged")
+        return {
+            "approved": False,
+            "status":   "flagged",
+            "message":  verification.failure_reason,
+            "ocr_result": ocr_result,
+        }
+
+    # Step 5b: name matching
     ocr_name = (ocr_result.get("fields") or {}).get("full_name")
     form_name = f"{first_name} {last_name}".strip()
     name_flagged = False

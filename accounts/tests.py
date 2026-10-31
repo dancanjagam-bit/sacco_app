@@ -9,16 +9,16 @@ class RegistrationTests(APITestCase):
 
     VALID_PAYLOAD = {
         "username":         "testuser123",
-        "password":         "Strongpass1",       # 8+ chars, has letter AND number
-        "confirm_password": "Strongpass1",        # must match password
+        "password":         "Strongpass1",
+        "confirm_password": "Strongpass1",
         "first_name":       "Test",
         "last_name":        "User",
         "email":            "test@example.com",
-        "national_id":      "12345678",            # 8 digits, numbers only
-        "phone_number":     "0712345678",          # valid Kenyan Airtel number
+        "national_id":      "28750187",   # realistic Kenyan NID (7-digit, valid range)
+        "phone_number":     "0712345678",
         "gender":           "male",
-        "date_of_birth":    "1990-01-01",          # 18+ years old
-        "county":           "Nairobi",             # valid Kenyan county
+        "date_of_birth":    "1990-01-01",
+        "county":           "Nairobi",
         "address":          "123 Test Street, Nairobi",
     }
 
@@ -63,7 +63,7 @@ class RegistrationTests(APITestCase):
         """Registering a second account with the same username returns 400."""
         self.client.post("/api/register/", self.VALID_PAYLOAD, format="json")
 
-        payload2 = {**self.VALID_PAYLOAD, "email": "other@example.com", "national_id": "87654321"}
+        payload2 = {**self.VALID_PAYLOAD, "email": "other@example.com", "national_id": "31456789"}
         response = self.client.post("/api/register/", payload2, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("username", response.data)
@@ -100,7 +100,7 @@ class RegistrationTests(APITestCase):
 
     def test_invalid_phone_rejected(self):
         """Non-Kenyan phone number format is rejected."""
-        payload = {**self.VALID_PAYLOAD, "phone_number": "1234567890", "username": "user3", "email": "u3@test.com", "national_id": "11111111"}
+        payload = {**self.VALID_PAYLOAD, "phone_number": "1234567890", "username": "user3", "email": "u3@test.com", "national_id": "25678901"}
         response = self.client.post("/api/register/", payload, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("phone_number", response.data)
@@ -109,14 +109,14 @@ class RegistrationTests(APITestCase):
         """Members under 18 are rejected."""
         from datetime import date, timedelta
         dob = (date.today() - timedelta(days=365*17)).isoformat()
-        payload = {**self.VALID_PAYLOAD, "date_of_birth": dob, "username": "user4", "email": "u4@test.com", "national_id": "22222222"}
+        payload = {**self.VALID_PAYLOAD, "date_of_birth": dob, "username": "user4", "email": "u4@test.com", "national_id": "31234567"}
         response = self.client.post("/api/register/", payload, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("date_of_birth", response.data)
 
     def test_invalid_county_rejected(self):
         """A county not in Kenya's 47 counties is rejected."""
-        payload = {**self.VALID_PAYLOAD, "county": "London", "username": "user5", "email": "u5@test.com", "national_id": "33333333"}
+        payload = {**self.VALID_PAYLOAD, "county": "London", "username": "user5", "email": "u5@test.com", "national_id": "34567890"}
         response = self.client.post("/api/register/", payload, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("county", response.data)

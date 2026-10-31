@@ -181,6 +181,7 @@ def register(request):
                 last_name=data.get("last_name", ""),
                 id_document_file=id_document_file,
                 selfie_file=selfie_file,
+                date_of_birth=data.get("date_of_birth"),
             )
 
             if id_check.get("approved") is False:
