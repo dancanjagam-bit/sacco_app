@@ -3,6 +3,10 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 
+# Transport records are separated from this financial ledger module only for
+# maintainability; importing them here makes Django discover their migrations.
+from .transport_models import TransportRole, TransportRoleGrant, TransportRoute, Vehicle, VehicleOwnership, CrewAssignment, TransportShift, TransportCollection, TransportRemittance, TransportPayment, TransportAllocationRule, TransportPaymentAllocation
+
 User = settings.AUTH_USER_MODEL
 
 
@@ -71,6 +75,8 @@ class Loan(models.Model):
     # Snapshot of eligibility at time of application
     savings_months    = models.PositiveIntegerField(default=0)
     total_savings_at_application = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_report_authorized = models.BooleanField(default=False)
+    credit_report_authorized_at = models.DateTimeField(null=True, blank=True)
 
     approved_by       = models.ForeignKey(
         User, null=True, blank=True,
@@ -81,6 +87,33 @@ class Loan(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class LoanAssessmentPolicy(models.Model):
+    version=models.CharField(max_length=60,unique=True)
+    rules=models.JSONField(default=dict)
+    active=models.BooleanField(default=False)
+    created_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name="created_loan_assessment_policies")
+    approved_by=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name="approved_loan_assessment_policies")
+    approved_at=models.DateTimeField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=["-created_at"]
+
+
+class LoanAssessment(models.Model):
+    loan=models.ForeignKey(Loan,on_delete=models.PROTECT,related_name="assessments")
+    policy=models.ForeignKey(LoanAssessmentPolicy,null=True,blank=True,on_delete=models.PROTECT,related_name="assessments")
+    policy_version=models.CharField(max_length=60)
+    inputs=models.JSONField(default=dict)
+    reasons=models.JSONField(default=list)
+    outcome=models.CharField(max_length=24,default="submitted_for_review")
+    decision_maker=models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL,related_name="loan_assessment_decisions")
+    decision_at=models.DateTimeField(null=True,blank=True)
+    decision_reason=models.TextField(blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=["-created_at"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -413,6 +446,9 @@ class CRBCheck(models.Model):
         ("flagged",        "Flagged"),
         ("error",          "Error"),
         ("not_configured", "Not Configured"),
+        ("not_authorized", "Not Authorized"),
+        ("needs_review", "Needs Review"),
+        ("disputed", "Disputed"),
     ]
 
     loan              = models.OneToOneField(
@@ -428,7 +464,14 @@ class CRBCheck(models.Model):
         max_length=20, choices=STATUS_CHOICES, default="pending",
     )
     score             = models.IntegerField(null=True, blank=True)
-    active_loans_count = models.IntegerField(default=0)
+    active_loans_count = models.IntegerField(null=True, blank=True, default=None)
+    request_reference = models.CharField(max_length=120, blank=True)
+    report_date = models.DateField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    external_obligations = models.JSONField(null=True, blank=True, default=None)
+    repayment_default_information = models.JSONField(null=True, blank=True, default=None)
+    missing_data = models.JSONField(default=list, blank=True)
+    coverage_limitations = models.TextField(blank=True)
     raw_response      = models.JSONField(default=dict, blank=True)
     checked_at        = models.DateTimeField(auto_now_add=True)
 
@@ -445,3 +488,100 @@ class CRBCheck(models.Model):
 
     def __str__(self):
         return f"CRBCheck — Loan #{self.loan_id} ({self.provider or 'n/a'}) → {self.status}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 📲 M-Pesa / Daraja STK Push Transaction
+# Tracks every payment initiated via Lipa Na M-Pesa Online (STK push).
+# One row per STK push attempt; the callback view updates it when Daraja
+# posts back the result.
+# ─────────────────────────────────────────────────────────────────────────────
+class MpesaTransaction(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ("registration", "Registration Fee"),
+        ("deposit",      "Savings Deposit"),
+        ("repayment",    "Loan Repayment"),
+        ("fee",          "Other Fee"),
+        ("transport_remittance", "Transport Remittance"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending",   "Pending — waiting for member to enter PIN"),
+        ("confirmed", "Confirmed — payment received"),
+        ("failed",    "Failed — member cancelled or timeout"),
+        ("cancelled", "Cancelled by member"),
+    ]
+
+    # Who is paying
+    user         = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mpesa_transactions",
+    )
+    phone        = models.CharField(
+        max_length=15,
+        help_text="Phone number used for payment in 254XXXXXXXXX format",
+    )
+
+    # Payment details
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES)
+    amount       = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # Daraja request tracking
+    checkout_request_id  = models.CharField(
+        max_length=100, unique=True,
+        help_text="Daraja CheckoutRequestID — used to match the callback",
+    )
+    merchant_request_id  = models.CharField(max_length=100, blank=True, default="")
+
+    # Daraja callback result
+    status               = models.CharField(max_length=15, choices=STATUS_CHOICES, default="pending")
+    mpesa_receipt        = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="M-Pesa receipt code e.g. QJL7XXXXXX",
+    )
+    result_code          = models.IntegerField(null=True, blank=True)
+    result_desc          = models.TextField(blank=True, default="")
+
+    # Optional link to the core Transaction record created on confirmation
+    transaction          = models.OneToOneField(
+        Transaction,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="mpesa_payment",
+        help_text="Core ledger Transaction created when this payment confirmed",
+    )
+
+    # Optional loan link (set when payment_type='repayment')
+    loan                 = models.ForeignKey(
+        Loan,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="mpesa_repayments",
+    )
+
+    transport_remittance = models.ForeignKey(
+        "core.TransportRemittance", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="mpesa_transactions",
+    )
+
+    # Optional savings account type (set when payment_type='deposit')
+    account_type         = models.CharField(
+        max_length=10, blank=True, default="",
+        help_text="'bosa' or 'fosa' — only relevant for deposit payments",
+    )
+
+    # Raw Daraja callback payload for audit / debugging
+    raw_callback         = models.JSONField(default=dict, blank=True)
+
+    created_at           = models.DateTimeField(auto_now_add=True)
+    updated_at           = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"MpesaTxn #{self.id} — {self.user.username} "
+            f"{self.payment_type} KES {self.amount} [{self.status}]"
+        )

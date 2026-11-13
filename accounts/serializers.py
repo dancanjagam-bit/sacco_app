@@ -42,6 +42,21 @@ def validate_kenyan_national_id(value: str) -> str:
         raise serializers.ValidationError(
             "Enter a valid Kenyan National ID number (5–8 digits, numbers only)."
         )
+    # Inline structural checks so the serializer blocks obvious fakes immediately
+    # (the full 6-layer check runs again in id_verification.py during registration)
+    n = int(cleaned)
+    if n < 100000:
+        raise serializers.ValidationError(
+            "This National ID number is too short to be a valid Kenyan ID."
+        )
+    if n > 40000000:
+        raise serializers.ValidationError(
+            "National ID exceeds the valid Kenyan range (max 40,000,000)."
+        )
+    if len(set(cleaned)) == 1:
+        raise serializers.ValidationError(
+            "National ID cannot consist of a single repeated digit."
+        )
     return cleaned
 
 
@@ -128,6 +143,9 @@ class RegistrationSerializer(serializers.Serializer):
 
     # File uploads for ID verification
     id_document = serializers.FileField(required=False, allow_null=True)
+    id_document_front = serializers.FileField(required=False, allow_null=True)
+    id_document_back = serializers.FileField(required=False, allow_null=True)
+    id_verification_consent = serializers.BooleanField(required=False, default=False)
     selfie      = serializers.FileField(required=False, allow_null=True)
 
     # ── Field-level validators ────────────────────────────────────────────
@@ -181,6 +199,21 @@ class RegistrationSerializer(serializers.Serializer):
                 raise serializers.ValidationError(exc.messages)
         return file
 
+    def validate_id_document_front(self, file):
+        return self._validate_id_upload(file)
+
+    def validate_id_document_back(self, file):
+        return self._validate_id_upload(file)
+
+    @staticmethod
+    def _validate_id_upload(file):
+        if file:
+            from accounts.services.file_validator import validate_id_document
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try: validate_id_document(file)
+            except DjangoValidationError as exc: raise serializers.ValidationError(exc.messages)
+        return file
+
     def validate_selfie(self, file):
         if file:
             from accounts.services.file_validator import validate_selfie
@@ -193,6 +226,8 @@ class RegistrationSerializer(serializers.Serializer):
 
     # ── Cross-field ───────────────────────────────────────────────────────
     def validate(self, attrs):
+        if (attrs.get("id_document") or attrs.get("id_document_front") or attrs.get("id_document_back")) and not attrs.get("id_verification_consent"):
+            raise serializers.ValidationError({"id_verification_consent":"Consent is required when submitting identity documents."})
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
         return attrs

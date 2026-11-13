@@ -22,10 +22,14 @@ class StaffProfileAdmin(admin.ModelAdmin):
 
 @admin.register(OTPRequest)
 class OTPRequestAdmin(admin.ModelAdmin):
-    list_display  = ("user", "code", "method", "used", "created_at")
+    list_display  = ("user", "method", "used", "created_at")
     list_filter   = ("method", "used")
     search_fields = ("user__username",)
-    readonly_fields = ("code", "created_at")
+    readonly_fields = ("created_at",)
+    exclude = ("code",)
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(Notification)

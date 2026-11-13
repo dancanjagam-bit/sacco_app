@@ -1,7 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
-import random
+import secrets
 import string
 
 
@@ -27,6 +27,7 @@ class StaffProfile(models.Model):
         ("loan_officer",  "Loan Officer"),
         ("accountant",    "Accountant"),
         ("secretary",     "Secretary"),
+        ("kyc_officer",   "KYC Officer"),
         ("it_admin",      "IT Administrator"),
     ]
     STATUS_CHOICES = [
@@ -72,7 +73,7 @@ class OTPRequest(models.Model):
     @classmethod
     def generate(cls, user, method):
         cls.objects.filter(user=user, used=False).update(used=True)
-        code = "".join(random.choices(string.digits, k=6))
+        code = "".join(secrets.choice(string.digits) for _ in range(6))
         return cls.objects.create(user=user, code=code, method=method)
 
     @property
@@ -80,7 +81,7 @@ class OTPRequest(models.Model):
         return timezone.now() > self.created_at + timezone.timedelta(minutes=self.EXPIRY_MINUTES)
 
     def __str__(self):
-        return f"{self.user.username} — {self.code} ({'used' if self.used else 'active'})"
+        return f"{self.user.username} — OTP ({'used' if self.used else 'active'})"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -192,10 +193,11 @@ class IDVerification(models.Model):
         ("iprs_stub",       "IPRS Verification (Stub — not live)"),
     ]
     STATUS_CHOICES = [
-        ("pending",   "Pending Verification"),
-        ("verified",  "Verified"),
-        ("failed",    "Verification Failed"),
-        ("flagged",   "Flagged for Review"),
+        ("draft", "Draft"), ("submitted", "Submitted"),
+        ("verification_pending", "Verification Pending"), ("verified", "Verified"),
+        ("needs_review", "Needs Review"), ("provider_unavailable", "Provider Unavailable"),
+        # Legacy values remain readable for already stored records.
+        ("pending", "Legacy Pending"), ("failed", "Legacy Failed"), ("flagged", "Legacy Flagged"),
     ]
 
     user            = models.OneToOneField(User, on_delete=models.CASCADE, related_name="id_verification")
@@ -208,8 +210,14 @@ class IDVerification(models.Model):
     failure_reason   = models.TextField(blank=True, default="")
 
     # Uploaded document files
-    id_document      = models.FileField(upload_to="id_documents/", null=True, blank=True)
+    id_document      = models.FileField(upload_to="id_documents/", null=True, blank=True)  # legacy single-document field
+    id_document_front = models.FileField(upload_to="id_documents/", null=True, blank=True)
+    id_document_back = models.FileField(upload_to="id_documents/", null=True, blank=True)
     ocr_result       = models.JSONField(default=dict, blank=True)  # raw extracted text and parsed fields
+    verification_purpose = models.CharField(max_length=40, default="membership_onboarding")
+    member_consent = models.BooleanField(default=False)
+    consented_at = models.DateTimeField(null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
 
     # Selfie / face verification
     selfie           = models.FileField(upload_to="selfies/", null=True, blank=True)
@@ -225,4 +233,16 @@ class IDVerification(models.Model):
     updated_at       = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.username} ID {self.national_id} — {self.status}"
+        return f"IDVerification #{self.pk} for user #{self.user_id} — {self.status}"
+
+
+class IDVerificationAttempt(models.Model):
+    PROVIDER_CHOICES = [("sandbox", "Sandbox"), ("manual", "Manual review"), ("smile_identity", "Smile Identity")]
+    STATUS_CHOICES = [("verification_pending", "Pending"), ("verified", "Verified"), ("needs_review", "Needs review"), ("provider_unavailable", "Provider unavailable")]
+    verification = models.ForeignKey(IDVerification, on_delete=models.CASCADE, related_name="attempts")
+    provider = models.CharField(max_length=24, choices=PROVIDER_CHOICES)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES)
+    provider_reference = models.CharField(max_length=120, blank=True)
+    reason_code = models.CharField(max_length=80, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)

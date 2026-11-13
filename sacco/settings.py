@@ -22,13 +22,21 @@ load_env_file()
 # ─────────────────────────────────────────────────────────────────────────────
 # Core
 # ─────────────────────────────────────────────────────────────────────────────
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me-in-production")
 DEBUG      = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes", "on"}
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise RuntimeError("SECRET_KEY must be set when DEBUG=False.")
+    SECRET_KEY = "django-insecure-local-development-only"
+if not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5):
+    raise RuntimeError("SECRET_KEY must be a unique value of at least 50 characters in production.")
 ALLOWED_HOSTS = [
     h.strip()
     for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
     if h.strip()
 ]
+if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
+    raise RuntimeError("Set explicit ALLOWED_HOSTS before running with DEBUG=False.")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -36,6 +44,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Applications
 # ─────────────────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    # ── Local apps first so their management commands override Django's builtins ──
+    "accounts",
+    "core",
+    "members",
+
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -47,15 +60,12 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
-
-    "accounts",
-    "core",
-    "members",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",   # serves static files in production
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -78,7 +88,7 @@ AUTHENTICATION_BACKENDS = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS":    [],
+        "DIRS":    [BASE_DIR / "frontend" / "build"],   # React build for production
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -139,6 +149,12 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL   = "media/"
 MEDIA_ROOT  = BASE_DIR / "media"
 
+# WhiteNoise — serve compressed static files efficiently
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Serve the React production build from Django
+WHITENOISE_ROOT = BASE_DIR / "frontend" / "build"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CORS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -153,6 +169,11 @@ else:
     ]
 
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DRF
@@ -192,7 +213,8 @@ if os.getenv("EMAIL_HOST"):
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
     DEFAULT_FROM_EMAIL  = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 else:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    # Avoid printing password-reset codes and financial notices to local logs.
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -253,11 +275,27 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER      = True
     X_FRAME_OPTIONS                = "DENY"
     SECURE_CONTENT_TYPE_NOSNIFF    = True
+    SECURE_PROXY_SSL_HEADER        = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_REFERRER_POLICY         = "same-origin"
+    SESSION_COOKIE_HTTPONLY        = True
+    CSRF_COOKIE_HTTPONLY           = True
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SACCO organisation details (used in statements, branding, emails)
+# ─────────────────────────────────────────────────────────────────────────────
+SACCO_NAME       = os.getenv("SACCO_NAME",       "Nairobi West Transport Cooperative Society")
+SACCO_SHORT_NAME = os.getenv("SACCO_SHORT_NAME", "NW Transport")
+SACCO_ADDRESS    = os.getenv("SACCO_ADDRESS",    "Nairobi West, Nairobi County, Kenya")
+SACCO_PHONE      = os.getenv("SACCO_PHONE",      "0758007127")
+SACCO_EMAIL      = os.getenv("SACCO_EMAIL",      "info@nwtcs.co.ke")
+SACCO_PAYBILL    = os.getenv("SACCO_PAYBILL",    os.getenv("MPESA_SHORTCODE", "174379"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # File upload limits
 # ─────────────────────────────────────────────────────────────────────────────
 ID_DOC_MAX_MB = int(os.getenv("ID_DOC_MAX_MB", "5"))
+KYC_DOCUMENT_RETENTION_DAYS = int(os.getenv("KYC_DOCUMENT_RETENTION_DAYS", "730"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Africa's Talking (SMS)
@@ -281,9 +319,35 @@ CRB_API_URL              = os.getenv("CRB_API_URL", "")
 CRB_FLAG_SCORE_THRESHOLD = int(os.getenv("CRB_FLAG_SCORE_THRESHOLD", "500"))
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Daraja / M-Pesa (Safaricom)
+# Docs: https://developer.safaricom.co.ke/Documentation
+# ─────────────────────────────────────────────────────────────────────────────
+MPESA_ENV             = os.getenv("MPESA_ENV", "sandbox")   # "sandbox" | "production"
+MPESA_CONSUMER_KEY    = os.getenv("MPESA_CONSUMER_KEY", "")
+MPESA_CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET", "")
+MPESA_SHORTCODE       = os.getenv("MPESA_SHORTCODE", "174379")   # sandbox default
+MPESA_PASSKEY         = os.getenv("MPESA_PASSKEY", "")
+
+# Public HTTPS base URL Daraja will POST callbacks to (no trailing slash).
+# In dev: expose via ngrok and set e.g. https://abc123.ngrok.io
+MPESA_CALLBACK_BASE_URL = os.getenv("MPESA_CALLBACK_BASE_URL", "")
+
+# One-time registration fee (KES) charged on a member's first payment.
+# Set to 0 to disable the fee requirement.
+MPESA_REGISTRATION_FEE = int(os.getenv("MPESA_REGISTRATION_FEE", "500"))
+
+# Daraja API base URLs (resolved automatically from MPESA_ENV)
+MPESA_BASE_URL = (
+    "https://sandbox.safaricom.co.ke"
+    if MPESA_ENV == "sandbox"
+    else "https://api.safaricom.co.ke"
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Smile Identity — face / biometric verification
 # ─────────────────────────────────────────────────────────────────────────────
 SMILE_IDENTITY_API_KEY    = os.getenv("SMILE_IDENTITY_API_KEY", "")
 SMILE_IDENTITY_PARTNER_ID = os.getenv("SMILE_IDENTITY_PARTNER_ID", "")
 SMILE_IDENTITY_ENV        = os.getenv("SMILE_IDENTITY_ENV", "sandbox")
+SMILE_IDENTITY_API_URL    = os.getenv("SMILE_IDENTITY_API_URL", "")
 FACE_MATCH_THRESHOLD      = int(os.getenv("FACE_MATCH_THRESHOLD", "70"))

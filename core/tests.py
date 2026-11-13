@@ -284,3 +284,30 @@ class SavingsBOSAFOSATests(APITestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+
+class TransactionHistoryEndpointTests(APITestCase):
+    def test_history_is_paginated_filtered_and_keeps_account_wide_totals(self):
+        member = User.objects.create_user(username="history_member", password="TestPass1")
+        other = User.objects.create_user(username="other_member", password="TestPass1")
+        Transaction.objects.bulk_create([
+            Transaction(user=member, type="deposit", amount=Decimal("10.00"), note=f"deposit {i}")
+            for i in range(51)
+        ])
+        Transaction.objects.create(user=other, type="deposit", amount=Decimal("999.00"))
+
+        self.client.force_authenticate(user=member)
+        first_page = self.client.get("/api/transactions/")
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(first_page.data["count"], 51)
+        self.assertEqual(len(first_page.data["results"]), 50)
+        self.assertEqual(first_page.data["summary"]["deposits"], 510.0)
+        self.assertEqual(first_page.data["summary"]["count"], 51)
+
+        second_page = self.client.get("/api/transactions/?page=2")
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(len(second_page.data["results"]), 1)
+
+        filtered = self.client.get("/api/transactions/?search=deposit%2050")
+        self.assertEqual(filtered.data["count"], 1)
+        self.assertEqual(filtered.data["summary"]["count"], 51)

@@ -16,32 +16,50 @@ export default function Notifications() {
   const [notifs,   setNotifs]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [unread,   setUnread]   = useState(0);
+  const [error,    setError]    = useState("");
+  const [actionError, setActionError] = useState("");
+  const [retryAction, setRetryAction] = useState(null);
 
   useEffect(() => { fetchNotifs(); }, []);
 
   const fetchNotifs = async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await api.get("notifications/");
       setNotifs(res.data.notifications);
       setUnread(res.data.unread_count);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      setError("Could not load notifications. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const markRead = async (id) => {
-    await api.post(`notifications/${id}/read/`);
-    setNotifs(notifs.map(n => n.id === id ? { ...n, is_read: true } : n));
-    setUnread(prev => Math.max(0, prev - 1));
+    setActionError("");
+    setRetryAction(null);
+    try {
+      await api.post(`notifications/${id}/read/`);
+      setNotifs(notifs.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnread(prev => Math.max(0, prev - 1));
+    } catch {
+      setActionError("Failed to mark this notification as read. Please try again.");
+      setRetryAction(() => () => markRead(id));
+    }
   };
 
   const markAllRead = async () => {
-    await api.post("notifications/read-all/");
-    setNotifs(notifs.map(n => ({ ...n, is_read: true })));
-    setUnread(0);
+    setActionError("");
+    setRetryAction(null);
+    try {
+      await api.post("notifications/read-all/");
+      setNotifs(notifs.map(n => ({ ...n, is_read: true })));
+      setUnread(0);
+    } catch {
+      setActionError("Failed to mark notifications as read. Please try again.");
+      setRetryAction(() => () => markAllRead());
+    }
   };
 
   return (
@@ -65,8 +83,20 @@ export default function Notifications() {
             )}
           </div>
 
+          {actionError && (
+            <div className="alert alert-error" role="alert">
+              {actionError}{" "}
+              <button className="inline-retry" onClick={retryAction || fetchNotifs}>Try again</button>
+            </div>
+          )}
+
           {loading ? (
             <p style={{ color: "#94a3b8" }}>Loading notifications...</p>
+          ) : error ? (
+            <div className="alert alert-error" role="alert">
+              {error}{" "}
+              <button className="inline-retry" onClick={fetchNotifs}>Retry</button>
+            </div>
           ) : notifs.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">🔔</div>

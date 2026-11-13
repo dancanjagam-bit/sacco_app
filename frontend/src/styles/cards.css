@@ -1,5 +1,5 @@
 /* ===================================
-   Dashboard Cards
+   Dashboard Cards — Premium v3
 =================================== */
 
 .cards-grid {
@@ -11,44 +11,58 @@
 
 .dashboard-card {
   background: var(--card);
-  border-radius: var(--radius);
-  padding: 22px 20px;
-  box-shadow: var(--shadow);
-  transition: transform .2s, box-shadow .2s;
+  border-radius: var(--radius-lg);
+  padding: 24px 22px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease);
   display: flex;
   flex-direction: column;
   gap: 6px;
   position: relative;
   overflow: hidden;
+  border: 1px solid var(--border-light);
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--primary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .dashboard-card::after {
   content: '';
   position: absolute;
-  top: 0; right: 0;
-  width: 80px; height: 80px;
+  top: -30px; right: -30px;
+  width: 100px; height: 100px;
   border-radius: 50%;
-  background: currentColor;
-  opacity: .04;
-  transform: translate(20px, -20px);
+  background: var(--primary-50);
+  opacity: 0.6;
 }
 
 .dashboard-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border);
 }
 
 .card-icon {
   font-size: 28px;
+  position: relative;
+  z-index: 1;
 }
 
 .card-title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: .5px;
+  letter-spacing: .8px;
+  position: relative;
+  z-index: 1;
 }
 
 .card-value {
@@ -56,4 +70,7 @@
   font-size: 28px;
   font-weight: 800;
   color: var(--text);
+  letter-spacing: -.4px;
+  position: relative;
+  z-index: 1;
 }

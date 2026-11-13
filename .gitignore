@@ -7,6 +7,11 @@ db.sqlite3
 .env
 .env.*
 
+# Member identity documents and local development tools
+/media/
+/.vscode/
+/cloudflared.exe
+
 # Logs
 logs/
 *.log

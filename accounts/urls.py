@@ -14,6 +14,9 @@ from .views import (
     notification_read,
     notification_read_all,
     audit_log,
+    my_id_verification,
+    id_verification_documents,
+    id_verification_submit,
     admin_id_verifications,
     admin_id_verification_detail,
     admin_id_verification_review,
@@ -47,6 +50,11 @@ urlpatterns = [
     path("admin/id-verifications/", admin_id_verifications, name="admin-id-verifications"),
     path("admin/id-verifications/<int:verification_id>/", admin_id_verification_detail, name="admin-id-verification-detail"),
     path("admin/id-verifications/<int:verification_id>/review/", admin_id_verification_review, name="admin-id-verification-review"),
+
+    # Member's own KYC status
+    path("id-verification/status/", my_id_verification, name="my-id-verification"),
+    path("id-verification/documents/", id_verification_documents, name="id-verification-documents"),
+    path("id-verification/submit/", id_verification_submit, name="id-verification-submit"),
 
     # Protected media
     path("media/protected/<path:path>", ProtectedMediaView.as_view(), name="protected-media"),

@@ -64,6 +64,13 @@ def validate_id_document(file) -> None:
         raise ValidationError(
             f"ID document exceeds the {getattr(settings, 'ID_DOC_MAX_MB', 5)} MB size limit."
         )
+    if mime == "application/pdf":
+        content=file.read()
+        file.seek(0)
+        if not content.startswith(b"%PDF-") or b"%%EOF" not in content[-2048:]:
+            raise ValidationError("The PDF file is incomplete or invalid.")
+        return
+    _validate_decoded_image(file)
 
 
 def validate_selfie(file) -> None:
@@ -78,3 +85,33 @@ def validate_selfie(file) -> None:
         raise ValidationError(
             f"Selfie exceeds the {getattr(settings, 'ID_DOC_MAX_MB', 5)} MB size limit."
         )
+    _validate_decoded_image(file)
+
+
+def _validate_decoded_image(file):
+    """Decode actual image bytes and reject corrupt, tiny or decompression-bomb images."""
+    try:
+        from PIL import Image, ImageStat
+        file.seek(0)
+        image=Image.open(file)
+        if image.format not in ("JPEG", "PNG", "GIF"):
+            raise ValidationError("Image content does not match a supported format.")
+        if getattr(image, "n_frames", 1) != 1:
+            raise ValidationError("Animated images are not accepted for identity documents.")
+        if image.width > 12000 or image.height > 12000:
+            raise ValidationError("Image dimensions are too large.")
+        image.verify()
+        file.seek(0)
+        image=Image.open(file).convert("L")
+        if image.width < 640 or image.height < 400:
+            raise ValidationError("Image is too small to review. Use a clear image at least 640 × 400 pixels.")
+        # Reject almost blank images, while allowing ordinary bright/low-contrast cards.
+        stat=ImageStat.Stat(image.resize((64, 40)))
+        if stat.stddev[0] < 4:
+            raise ValidationError("Image quality is too low to review. Retake the document in good light.")
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError("Image content is invalid or unreadable.") from exc
+    finally:
+        file.seek(0)

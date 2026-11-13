@@ -1,6 +1,8 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
+import { SaccoProvider } from "./context/SaccoContext";
 import AdminRoute from "./components/AdminRoute";
 
 // Auth pages
@@ -19,6 +21,7 @@ import Reports       from "./pages/Reports";
 import Profile       from "./pages/Profile";
 import ChangePassword from "./pages/ChangePassword";
 import Notifications from "./pages/Notifications";
+import IDVerificationStatus from "./pages/IDVerificationStatus";
 
 // Admin pages
 import AdminDashboard from "./pages/AdminDashboard";
@@ -33,6 +36,10 @@ import AdminExitRequests from "./pages/AdminExitRequests";
 import AdminAudit     from "./pages/AdminAudit";
 import AdminIDVerifications from "./pages/AdminIDVerifications";
 import AdminCRBChecks from "./pages/AdminCRBChecks";
+import AdminSASRA from "./pages/AdminSASRA";
+import AdminArrears from "./pages/AdminArrears";
+import TransportCrew from "./pages/TransportCrew";
+import TransportOperations from "./pages/TransportOperations";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -49,6 +56,8 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
+      <SaccoProvider>
       <BrowserRouter>
         <Routes>
           {/* ── Public / Auth ───────────────────────────────────────────── */}
@@ -67,6 +76,8 @@ function App() {
           <Route path="/profile"        element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/notifications"  element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/id-verification" element={<ProtectedRoute><IDVerificationStatus /></ProtectedRoute>} />
+          <Route path="/transport/crew" element={<ProtectedRoute><TransportCrew /></ProtectedRoute>} />
 
           {/* ── Admin pages ───────────────────────────────────────────────── */}
           <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -85,11 +96,16 @@ function App() {
           <Route path="/admin/audit"        element={<AdminRoute><AdminAudit /></AdminRoute>} />
           <Route path="/admin/id-verifications" element={<AdminRoute><AdminIDVerifications /></AdminRoute>} />
           <Route path="/admin/crb-checks"       element={<AdminRoute><AdminCRBChecks /></AdminRoute>} />
+          <Route path="/admin/sasra"            element={<AdminRoute><AdminSASRA /></AdminRoute>} />
+          <Route path="/admin/arrears" element={<AdminRoute><AdminArrears /></AdminRoute>} />
+          <Route path="/admin/transport" element={<AdminRoute><TransportOperations /></AdminRoute>} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </SaccoProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }

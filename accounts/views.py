@@ -1,7 +1,11 @@
+import hmac
+
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Max, Sum
+from django.conf import settings
+from django.db import transaction, IntegrityError
+from django.db.models import Max, Sum, Q
 from django.utils import timezone
+from django_ratelimit.decorators import ratelimit
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
@@ -12,11 +16,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 from members.models import Member
 from core.models import Savings, Loan
 from .models import OTPRequest, StaffProfile, Notification, AuditLog
-from sacco.notifications import (
-    send_otp as deliver_otp,
-    send_welcome,
-)
-from accounts.services.id_verification_service import run_id_verification
+from sacco.notifications import send_welcome
+from accounts.services.otp_delivery import dispatch_otp
 
 User = get_user_model()
 
@@ -48,6 +49,21 @@ class IsSuperAdmin(BasePermission):
             return False
 
 
+class IsKYCStaff(BasePermission):
+    """KYC access is limited to active KYC, secretary, or superadmin staff."""
+    def has_permission(self, request, view):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        if user.is_superuser or getattr(user, "is_admin", False):
+            return True
+        try:
+            profile = user.staff_profile
+            return profile.status == "active" and profile.role in {"kyc_officer", "secretary", "superadmin"}
+        except Exception:
+            return False
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: look up a user by username or email
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,33 +79,13 @@ def _find_user(identifier: str):
     return None
 
 
-def _send_otp(otp):
-    destination = {
-        "email":          otp.user.email,
-        "recovery_email": otp.user.recovery_email,
-        "phone":          getattr(getattr(otp.user, "member_profile", None), "phone_number", ""),
-        "recovery_phone": otp.user.recovery_phone,
-    }.get(otp.method, "")
-
-    print(f"\n{'='*50}")
-    print(f"  OTP CODE:  {otp.code}")
-    print(f"  Via:       {otp.method}  ->  {destination}")
-    print(f"  Expires:   {OTPRequest.EXPIRY_MINUTES} minutes")
-    print(f"{'='*50}\n")
-
-    return destination
 
 
-def _mask(value: str) -> str:
-    if "@" in value:
-        local, domain = value.split("@", 1)
-        return local[:2] + "***@" + domain
-    if len(value) >= 6:
-        return value[:3] + "****" + value[-3:]
-    return "****"
 
 
 def _profile_response(user):
+    from .access import access_snapshot
+
     try:
         member = user.member_profile
     except Member.DoesNotExist:
@@ -105,6 +101,7 @@ def _profile_response(user):
     total_loans    = Loan.objects.filter(user=user).count()
     approved_loans = Loan.objects.filter(user=user, status="approved").count()
 
+    access = access_snapshot(user)
     return {
         "username":        user.username,
         "first_name":      user.first_name,
@@ -127,6 +124,9 @@ def _profile_response(user):
         "total_savings":   total_savings,
         "total_loans":     total_loans,
         "approved_loans":  approved_loans,
+        "permissions":     access["permissions"],
+        "workspaces":      access["workspaces"],
+        "default_workspace": access["default_workspace"],
     }
 
 
@@ -137,13 +137,15 @@ def _profile_response(user):
 @permission_classes([AllowAny])
 def register(request):
     from .serializers import RegistrationSerializer
+    from .models import IDVerification, KYCSubmission, KYCConsentRecord, MemberApproval
+    from accounts.services.kyc_privacy import hash_national_id, retention_date
 
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
     member_number = None
-    id_check      = {}
+    id_status = "draft"
 
     try:
         with transaction.atomic():
@@ -157,8 +159,9 @@ def register(request):
                 recovery_phone=data.get("recovery_phone", ""),
             )
 
-            last_id = Member.objects.aggregate(max_id=Max("id"))["max_id"] or 0
-            member_number = f"SACCO{last_id + 1:06d}"
+            # Derive the initial public member number from the newly allocated
+            # user PK; the unique database constraint remains the authority.
+            member_number = f"SACCO{user.pk:06d}"
 
             Member.objects.create(
                 user=user,
@@ -169,37 +172,80 @@ def register(request):
                 date_of_birth=data["date_of_birth"],
                 county=data["county"],
                 address=data["address"],
+                status="inactive",
             )
 
-            # ── ID Verification ──────────────────────────────────────────
-            id_document_file = request.FILES.get("id_document")
-            selfie_file      = request.FILES.get("selfie")
-            id_check = run_id_verification(
+            front = data.get("id_document_front") or data.get("id_document")
+            back = data.get("id_document_back")
+            consent = bool(data.get("id_verification_consent"))
+            now = timezone.now()
+            verification = IDVerification.objects.create(
                 user=user,
                 national_id=data["national_id"],
-                first_name=data.get("first_name", ""),
-                last_name=data.get("last_name", ""),
-                id_document_file=id_document_file,
-                selfie_file=selfie_file,
-                date_of_birth=data.get("date_of_birth"),
+                national_id_hash=hash_national_id(data["national_id"]),
+                provider="manual",
+                status="submitted" if (front or back) else "draft",
+                verification_purpose="membership_onboarding",
+                member_consent=consent,
+                consented_at=now if consent else None,
+                submitted_at=now if (front or back) else None,
+                data_retention_until=retention_date() if consent else None,
             )
+            if front or back:
+                submission = KYCSubmission.objects.create(
+                    verification=verification,
+                    sequence=1,
+                    status="submitted",
+                    id_document_front=front,
+                    id_document_back=back,
+                    reviewed_fields={
+                        "first_name": data.get("first_name", ""),
+                        "last_name": data.get("last_name", ""),
+                        "national_id": data["national_id"],
+                        "date_of_birth": data["date_of_birth"].isoformat(),
+                    },
+                    consent_given=True,
+                    consent_text_version=getattr(settings, "KYC_CONSENT_VERSION", "1.0"),
+                    submitted_at=now,
+                )
+                # The top-level record points at the latest submission for
+                # compatibility; the versioned submission retains evidence.
+                verification.id_document_front = submission.id_document_front.name if front else ""
+                verification.id_document_back = submission.id_document_back.name if back else ""
+                verification.save(update_fields=("id_document_front", "id_document_back", "updated_at"))
 
-            if id_check.get("approved") is False:
-                raise ValueError(id_check.get("message", "ID verification failed."))
-
-            Notification.send(user, "Welcome to SACCO!", f"Your member number is {member_number}.", "success", "/dashboard")
+            KYCConsentRecord.objects.create(
+                user=user,
+                purpose="id_verification",
+                consent_given=consent,
+                consent_text_version=getattr(settings, "KYC_CONSENT_VERSION", "1.0"),
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=(request.META.get("HTTP_USER_AGENT", "") or "")[:300],
+            )
+            MemberApproval.objects.create(applicant=user, stage="secretary_review")
+            id_status = verification.status
+            Notification.send(
+                user, "Membership application received",
+                "Your account is ready for membership review. Identity documents remain pending staff review.",
+                "info", "/id-verification",
+            )
             AuditLog.log(user, "register", f"Member {member_number}", {"username": user.username}, request)
-            send_welcome(user, member_number)
+            transaction.on_commit(lambda: send_welcome(user, member_number))
 
-    except ValueError as exc:
-        return Response({"error": str(exc)}, status=400)
+    except IntegrityError:
+        # Simultaneous retries may race on username, email, phone or ID
+        # uniqueness. The atomic block rolls back all related rows.
+        return Response({
+            "error": "We could not complete this registration. Use account recovery or contact member support if you already registered.",
+        }, status=409)
 
     return Response({
         "message":       "Registration successful",
         "member_number": member_number,
-        "id_status":     id_check.get("status", "pending"),
-        "id_message":    id_check.get("message", ""),
-    })
+        "id_status":     id_status,
+        "membership_status": "pending_review",
+        "message_detail": "Your membership application is awaiting staff review.",
+    }, status=201)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -224,11 +270,11 @@ def logout(request):
 # ═════════════════════════════════════════════════════════════════════════════
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@ratelimit(key="ip", rate="10/h", block=True)
 def login_2fa(request):
     """
-    Admin users with 2FA enabled get a short-lived token after password login
-    and must call this endpoint with their OTP to get a full-access token.
-    For now: any admin login triggers 2FA.
+    Active staff and superuser accounts must verify a delivery-accepted OTP
+    after password login before receiving full-access tokens.
     """
     from .serializers import VerifyOTPSerializer
     from rest_framework_simplejwt.tokens import RefreshToken as JWTRefresh
@@ -240,20 +286,44 @@ def login_2fa(request):
 
     user = _find_user(identifier)
     if not user:
-        return Response({"error": "Invalid request."}, status=400)
+        return Response({"error": "Invalid request or verification code."}, status=400)
 
-    otp = (
-        OTPRequest.objects.filter(user=user, code=code, used=False)
-        .order_by("-created_at").first()
-    )
+    if not user.is_active or not (user.is_staff or user.is_superuser or user.is_admin):
+        return Response({"error": "This verification flow is only available to active staff accounts."}, status=403)
 
-    if not otp:
-        return Response({"error": "Invalid OTP."}, status=400)
-    if otp.is_expired:
-        return Response({"error": "OTP expired. Please log in again."}, status=400)
+    with transaction.atomic():
+        otp = (
+            OTPRequest.objects.select_for_update()
+            .filter(
+                user=user,
+                used=False,
+                purpose="login_2fa",
+                # A generated code is not a valid second factor until the
+                # configured delivery provider has accepted the dispatch.
+                delivery_status="accepted",
+            )
+            .order_by("-created_at")
+            .first()
+        )
 
-    otp.used = True
-    otp.save()
+        if not otp:
+            return Response({"error": "Invalid or expired verification code. Sign in again to request a new code."}, status=400)
+        if otp.is_expired:
+            otp.used = True
+            otp.save(update_fields=["used"])
+            return Response({"error": "Verification code expired. Sign in again to request a new code."}, status=400)
+        if otp.attempt_count >= 5:
+            otp.used = True
+            otp.save(update_fields=["used"])
+            return Response({"error": "Verification attempts exceeded. Sign in again to request a new code."}, status=400)
+
+        matches = hmac.compare_digest(otp.code, code)
+        otp.attempt_count += 1
+        if matches or otp.attempt_count >= 5:
+            otp.used = True
+        otp.save(update_fields=["attempt_count", "used"])
+        if not matches:
+            return Response({"error": "Invalid verification code. Check the code or sign in again to request a new one."}, status=400)
 
     refresh = JWTRefresh.for_user(user)
     AuditLog.log(user, "login", "2FA verified", request=request)
@@ -305,6 +375,10 @@ def profile(request):
     user = request.user
     for field in ["first_name", "last_name", "email", "recovery_email", "recovery_phone"]:
         if field in data:
+            if field == "recovery_email" and data[field] != user.recovery_email:
+                user.recovery_email_verified = False
+            if field == "recovery_phone" and data[field] != user.recovery_phone:
+                user.recovery_phone_verified = False
             setattr(user, field, data[field])
     user.save()
 
@@ -324,6 +398,84 @@ def profile(request):
 # ═════════════════════════════════════════════════════════════════════════════
 # STAFF MANAGEMENT (SuperAdmin only)
 # ═════════════════════════════════════════════════════════════════════════════
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@ratelimit(key="user", rate="5/h", block=True)
+def request_recovery_contact_verification(request):
+    method = request.data.get("method")
+    if method == "recovery_email":
+        destination = request.user.recovery_email
+    elif method == "recovery_phone":
+        destination = request.user.recovery_phone
+    else:
+        return Response({"error": "Choose a recovery email or recovery phone saved on your profile."}, status=400)
+    if not destination:
+        return Response({"error": "Add this recovery contact to your profile before verifying it."}, status=400)
+
+    now = timezone.now()
+    attempts = OTPRequest.objects.filter(
+        user=request.user, purpose="contact_verification",
+        created_at__gte=now - timezone.timedelta(hours=1),
+    )
+    if attempts.count() >= 3 or attempts.filter(created_at__gte=now - timezone.timedelta(seconds=60)).exists():
+        return Response({"error": "Verification resend limit reached. Try again later."}, status=429)
+
+    otp = OTPRequest.generate(request.user, method, purpose="contact_verification")
+    import hashlib
+    import hmac
+    from django.conf import settings as django_settings
+    otp.destination_digest = hmac.new(
+        django_settings.SECRET_KEY.encode(), destination.strip().lower().encode(), hashlib.sha256,
+    ).hexdigest()
+    otp.save(update_fields=("destination_digest",))
+    outcome = dispatch_otp(otp)
+    if outcome["status"] != "accepted":
+        AuditLog.log(
+            request.user, "otp_delivery_failure", "contact_verification",
+            {"method": method, "reason_code": outcome["reason_code"]}, request,
+        )
+        return Response({"error": "The verification message could not be submitted. Contact the SACCO office or try later."}, status=503)
+    return Response({"message": "The verification message was accepted by the configured provider. Enter its code to confirm this contact."}, status=202)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@ratelimit(key="user", rate="10/h", block=True)
+def confirm_recovery_contact_verification(request):
+    method = request.data.get("method")
+    code = str(request.data.get("code", ""))
+    if method not in ("recovery_email", "recovery_phone") or not code.isdigit() or len(code) != 6:
+        return Response({"error": "Enter the six-digit code and the recovery contact type."}, status=400)
+    destination = request.user.recovery_email if method == "recovery_email" else request.user.recovery_phone
+    import hashlib
+    import hmac
+    from django.conf import settings as django_settings
+    digest = hmac.new(
+        django_settings.SECRET_KEY.encode(), destination.strip().lower().encode(), hashlib.sha256,
+    ).hexdigest()
+    with transaction.atomic():
+        otp = OTPRequest.objects.select_for_update().filter(
+            user=request.user, method=method, purpose="contact_verification", used=False,
+        ).order_by("-created_at").first()
+        if (
+            not otp or otp.delivery_status != "accepted" or otp.is_expired
+            or otp.attempt_count >= 5 or not hmac.compare_digest(otp.destination_digest, digest)
+        ):
+            return Response({"error": "Invalid or expired verification code."}, status=400)
+        matches = hmac.compare_digest(otp.code, code)
+        otp.attempt_count += 1
+        if not matches and otp.attempt_count >= 5:
+            otp.used = True
+        otp.save(update_fields=("attempt_count", "used"))
+        if not matches:
+            return Response({"error": "Invalid or expired verification code."}, status=400)
+        otp.used = True
+        otp.save(update_fields=("used",))
+        field = "recovery_email_verified" if method == "recovery_email" else "recovery_phone_verified"
+        setattr(request.user, field, True)
+        request.user.save(update_fields=(field,))
+    AuditLog.log(request.user, "recovery_contact_verified", method, request=request)
+    return Response({"message": "Recovery contact verified."})
+
 @api_view(["GET", "POST"])
 @permission_classes([IsSuperAdmin])
 def staff_list(request):
@@ -530,6 +682,7 @@ def audit_log(request):
 # ═════════════════════════════════════════════════════════════════════════════
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@ratelimit(key="ip", rate="5/h", block=True)
 def forgot_password(request):
     from .serializers import ForgotPasswordSerializer
 
@@ -539,32 +692,39 @@ def forgot_password(request):
     method     = serializer.validated_data["method"]
 
     user = _find_user(identifier)
+    generic_message = "If the account and delivery method are valid, an OTP has been sent."
     if not user:
-        return Response({"message": "If an account exists, an OTP has been sent."})
+        return Response({"message": generic_message})
 
-    destinations = {
-        "email":          user.email,
-        "recovery_email": user.recovery_email,
-        "phone":          getattr(getattr(user, "member_profile", None), "phone_number", ""),
-        "recovery_phone": user.recovery_phone,
-    }
-    destination = destinations.get(method, "")
+    verified_destination = (
+        method == "recovery_email" and user.recovery_email_verified and bool(user.recovery_email)
+    ) or (
+        method == "recovery_phone" and user.recovery_phone_verified and bool(user.recovery_phone)
+    )
+    if not verified_destination:
+        return Response({"message": generic_message})
 
-    if not destination:
-        return Response({"error": f"No {method.replace('_', ' ')} on file for this account."}, status=400)
+    now = timezone.now()
+    recent = OTPRequest.objects.filter(
+        user=user, purpose="recovery", created_at__gte=now - timezone.timedelta(hours=1),
+    )
+    if recent.count() >= 3 or recent.filter(created_at__gte=now - timezone.timedelta(seconds=60)).exists():
+        return Response({"message": generic_message})
 
-    otp = OTPRequest.generate(user, method)
-    _send_otp(otp)
-    deliver_otp(user, otp.code, method)
+    otp = OTPRequest.generate(user, method, purpose="recovery")
+    outcome = dispatch_otp(otp)
+    if outcome["status"] != "accepted":
+        AuditLog.log(
+            user, "otp_delivery_failure", "password_recovery",
+            {"method": method, "reason_code": outcome["reason_code"]}, request,
+        )
 
-    return Response({
-        "message": f"OTP sent to {_mask(destination)}. Expires in {OTPRequest.EXPIRY_MINUTES} minutes.",
-        "otp_code": otp.code,   # DEV ONLY — remove in production
-    })
+    return Response({"message": generic_message})
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@ratelimit(key="ip", rate="20/h", block=True)
 def verify_otp(request):
     from .serializers import VerifyOTPSerializer
 
@@ -575,23 +735,34 @@ def verify_otp(request):
 
     user = _find_user(identifier)
     if not user:
-        return Response({"error": "Invalid request."}, status=400)
+        return Response({"error": "Invalid request or verification code."}, status=400)
 
-    otp = (
-        OTPRequest.objects.filter(user=user, code=code, used=False)
-        .order_by("-created_at").first()
-    )
+    import hmac
+    with transaction.atomic():
+        otp = (
+            OTPRequest.objects.select_for_update()
+            .filter(user=user, used=False, purpose="recovery")
+            .order_by("-created_at").first()
+        )
+        if not otp or otp.delivery_status != "accepted" or otp.is_expired or otp.attempt_count >= 5:
+            return Response({"error": "Invalid request or verification code."}, status=400)
+        matches = hmac.compare_digest(otp.code, code)
+        otp.attempt_count += 1
+        if not matches and otp.attempt_count >= 5:
+            otp.used = True
+        otp.save(update_fields=("attempt_count", "used"))
+        if not matches:
+            return Response({"error": "Invalid request or verification code."}, status=400)
 
-    if not otp:
-        return Response({"error": "Invalid OTP code."}, status=400)
     if otp.is_expired:
-        return Response({"error": "OTP has expired. Please request a new one."}, status=400)
+        return Response({"error": "Invalid request or verification code."}, status=400)
 
     return Response({"message": "OTP verified.", "valid": True})
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@ratelimit(key="ip", rate="10/h", block=True)
 def reset_password(request):
     from .serializers import ResetPasswordSerializer
 
@@ -601,35 +772,95 @@ def reset_password(request):
 
     user = _find_user(data["identifier"])
     if not user:
-        return Response({"error": "Invalid request."}, status=400)
+        return Response({"error": "Invalid request or verification code."}, status=400)
 
-    otp = (
-        OTPRequest.objects.filter(user=user, code=data["code"], used=False)
-        .order_by("-created_at").first()
-    )
+    from django.db import transaction as db_transaction
 
-    if not otp:
-        return Response({"error": "Invalid OTP code."}, status=400)
-    if otp.is_expired:
-        return Response({"error": "OTP has expired. Please request a new one."}, status=400)
+    with db_transaction.atomic():
+        import hmac
+        otp = (
+            OTPRequest.objects.select_for_update()
+            .filter(user=user, used=False, purpose="recovery")
+            .order_by("-created_at").first()
+        )
+        if not otp or otp.delivery_status != "accepted" or otp.attempt_count >= 5:
+            return Response({"error": "Invalid request or verification code."}, status=400)
+        if otp.is_expired:
+            return Response({"error": "Invalid request or verification code."}, status=400)
 
-    otp.used = True
-    otp.save()
-    user.set_password(data["new_password"])
-    user.save()
+        if not hmac.compare_digest(otp.code, data["code"]):
+            otp.attempt_count += 1
+            if otp.attempt_count >= 5:
+                otp.used = True
+            otp.save(update_fields=("attempt_count", "used"))
+            return Response({"error": "Invalid request or verification code."}, status=400)
+
+        otp.used = True
+        otp.save(update_fields=["used"])
+        user.set_password(data["new_password"])
+        user.save(update_fields=["password"])
+
+        # A password reset ends existing refresh-token sessions on all devices.
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+        outstanding = OutstandingToken.objects.filter(user=user).exclude(blacklistedtoken__isnull=False)
+        BlacklistedToken.objects.bulk_create(
+            [BlacklistedToken(token=token) for token in outstanding],
+            ignore_conflicts=True,
+        )
 
     AuditLog.log(user, "password_reset", request=request)
     return Response({"message": "Password reset successfully. You can now log in."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_id_verification(request):
+    """Return only the authenticated member's KYC status and their own review fields."""
+    from .models import IDVerification, IDVerificationAttempt
+    from accounts.services.kyc_privacy import mask_national_id
+    member = getattr(request.user, "member_profile", None)
+    verification = IDVerification.objects.filter(user=request.user).first()
+    own_id = verification.national_id if verification else getattr(member, "national_id", "") if member else ""
+    reviewed_fields = {
+        "national_id": own_id,
+        "first_name": request.user.first_name,
+        "last_name": request.user.last_name,
+        "date_of_birth": member.date_of_birth.isoformat() if member and member.date_of_birth else "",
+    }
+    if not verification:
+        return Response({
+            "status": "not_submitted", "national_id": mask_national_id(own_id),
+            "reviewed_fields": reviewed_fields, "ocr_result": {},
+            "created_at": None, "updated_at": None, "verified_at": None,
+            "failure_reason": "", "provider": "", "member_consent": False,
+            "submitted_at": None, "attempts": [],
+        })
+    attempts = IDVerificationAttempt.objects.filter(verification=verification).order_by("requested_at").values(
+        "provider", "status", "provider_reference", "reason_code", "requested_at", "completed_at",
+    )
+    return Response({
+        "status": verification.status,
+        "national_id": mask_national_id(verification.national_id),
+        "reviewed_fields": reviewed_fields,
+        "ocr_result": verification.ocr_result if isinstance(verification.ocr_result, dict) else {},
+        "created_at": verification.created_at, "updated_at": verification.updated_at,
+        "verified_at": verification.verified_at, "failure_reason": verification.failure_reason,
+        "provider": verification.provider, "member_consent": verification.member_consent,
+        "submitted_at": verification.submitted_at, "attempts": list(attempts),
+        "document_front_uploaded": bool(verification.id_document_front),
+        "document_back_uploaded": bool(verification.id_document_back),
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 🪪 ID Verification admin endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsKYCStaff])
 def admin_id_verifications(request):
     """List all IDVerification records with optional status filter."""
     from .models import IDVerification
+    from accounts.services.kyc_privacy import mask_national_id
     status_filter = request.query_params.get("status")
     qs = IDVerification.objects.select_related("user").order_by("-created_at")
     if status_filter:
@@ -641,7 +872,7 @@ def admin_id_verifications(request):
             "user_id":     v.user_id,
             "username":    v.user.username,
             "full_name":   v.user.get_full_name(),
-            "national_id": v.national_id,
+            "national_id": mask_national_id(v.national_id),
             "status":      v.status,
             "provider":    v.provider,
             "created_at":  v.created_at,
@@ -651,12 +882,15 @@ def admin_id_verifications(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdmin])
+@permission_classes([IsKYCStaff])
 def admin_id_verification_detail(request, verification_id):
     """Retrieve a single IDVerification record with OCR result, file URLs, and face match score."""
     from .models import IDVerification
     from django.shortcuts import get_object_or_404
     v = get_object_or_404(IDVerification, pk=verification_id)
+    from .services.kyc_privacy import log_pii_access
+    log_pii_access(v, request.user)
+    latest_submission = v.submissions.order_by("-sequence").first()
     return Response({
         "id":               v.pk,
         "user_id":          v.user_id,
@@ -667,9 +901,16 @@ def admin_id_verification_detail(request, verification_id):
         "provider":         v.provider,
         "failure_reason":   v.failure_reason,
         "ocr_result":       v.ocr_result,
-        "provider_response":v.provider_response,
         "face_match_score": v.face_match_score,
-        "id_document_url":  request.build_absolute_uri(f"/api/media/protected/{v.id_document.name}") if v.id_document else None,
+        "id_document_url":  request.build_absolute_uri(f"/api/media/protected/{v.id_document_front.name}") if v.id_document_front else None,
+        "id_document_back_url": request.build_absolute_uri(f"/api/media/protected/{v.id_document_back.name}") if v.id_document_back else None,
+        "latest_submission": ({
+            "id": latest_submission.pk,
+            "sequence": latest_submission.sequence,
+            "status": latest_submission.status,
+            "reviewed_fields": latest_submission.reviewed_fields,
+            "submitted_at": latest_submission.submitted_at,
+        } if latest_submission else None),
         "selfie_url":       request.build_absolute_uri(f"/api/media/protected/{v.selfie.name}") if v.selfie else None,
         "created_at":       v.created_at,
         "verified_at":      v.verified_at,
@@ -677,23 +918,37 @@ def admin_id_verification_detail(request, verification_id):
 
 
 @api_view(["POST"])
-@permission_classes([IsAdmin])
+@permission_classes([IsKYCStaff])
 def admin_id_verification_review(request, verification_id):
     """Staff manually set IDVerification status with notes."""
     from .models import IDVerification
     from django.shortcuts import get_object_or_404
     v = get_object_or_404(IDVerification, pk=verification_id)
     new_status = request.data.get("status")
-    notes      = request.data.get("notes", "")
-    allowed    = ("verified", "failed", "flagged", "pending")
+    notes = str(request.data.get("notes", "")).strip()
+    allowed = ("verified", "needs_review", "pending")
     if new_status not in allowed:
-        return Response({"error": f"status must be one of {allowed}"}, status=400)
+        return Response({"error": "status must be verified, needs_review, or pending"}, status=400)
+    if len(notes) < 10:
+        return Response({"error": "Provide a review reason of at least 10 characters."}, status=400)
     old_status = v.status
     v.status = new_status
+    from .models import IDVerificationAttempt
+    v.provider = "manual"
     if new_status == "verified":
         v.verified_by = request.user
         v.verified_at = timezone.now()
+    v.failure_reason = "" if new_status == "verified" else notes
     v.save()
+    latest_submission = v.submissions.order_by("-sequence").first()
+    if latest_submission:
+        latest_submission.status = "reviewed" if new_status == "verified" else "needs_information"
+        latest_submission.save(update_fields=["status"])
+    IDVerificationAttempt.objects.create(
+        verification=v, provider="manual", status="verified" if new_status == "verified" else "needs_review",
+        reason_code="manual_review_completed" if new_status == "verified" else "manual_review_follow_up",
+        completed_at=timezone.now(),
+    )
     Notification.send(
         v.user,
         title="Identity Verification Update",
@@ -704,7 +959,7 @@ def admin_id_verification_review(request, verification_id):
         actor=request.user,
         action="id_verify_review",
         target=f"IDVerification #{v.pk}",
-        details={"idverification_id": v.pk, "prev_status": old_status, "new_status": new_status, "notes": notes},
+        details={"idverification_id": v.pk, "prev_status": old_status, "new_status": new_status, "method": "manual", "reason": notes[:500]},
         request=request,
     )
     return Response({"message": f"Status updated to '{new_status}'.", "id": v.pk, "status": new_status})
@@ -723,31 +978,38 @@ class ProtectedMediaView(APIView):
 
     def get(self, request, path):
         from .models import IDVerification
+        from django.core.files.storage import default_storage
         from django.shortcuts import get_object_or_404
         from rest_framework.exceptions import PermissionDenied
+        from .services.kyc_privacy import log_pii_access
 
-        # Find the IDVerification record that owns this file
         verification = None
-        for v in IDVerification.objects.select_related("user").all():
-            if (v.id_document and v.id_document.name == path) or \
-               (v.selfie and v.selfie.name == path):
-                verification = v
+        for item in IDVerification.objects.select_related("user").iterator():
+            names = [
+                item.id_document.name if item.id_document else None,
+                item.id_document_front.name if item.id_document_front else None,
+                item.id_document_back.name if item.id_document_back else None,
+                item.selfie.name if item.selfie else None,
+            ]
+            if path in names:
+                verification = item
                 break
-
-        if verification is None:
+            if item.submissions.filter(
+                Q(id_document_front=path) | Q(id_document_back=path),
+            ).exists():
+                verification = item
+                break
+        if verification is None or not default_storage.exists(path):
             return Response({"error": "File not found."}, status=404)
 
-        is_owner = request.user == verification.user
-        is_admin = (
-            getattr(request.user, "is_admin", False)
-            or request.user.is_staff
-            or request.user.is_superuser
-        )
-        if not (is_owner or is_admin):
+        is_owner = request.user.pk == verification.user_id
+        is_kyc_staff = IsKYCStaff().has_permission(request, self)
+        if not (is_owner or is_kyc_staff):
             raise PermissionDenied("You do not have permission to access this file.")
+        if is_kyc_staff and not is_owner:
+            log_pii_access(verification, request.user)
 
-        full_path = os.path.join(django_settings.MEDIA_ROOT, path)
-        if not os.path.exists(full_path):
-            return Response({"error": "File not found on disk."}, status=404)
-
-        return FileResponse(open(full_path, "rb"))
+        response = FileResponse(default_storage.open(path, "rb"))
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response

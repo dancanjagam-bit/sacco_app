@@ -163,7 +163,7 @@ All status changes produce `Notification` records and `AuditLog` entries. New ad
     - _Requirements: 9, 10_
 
 - [ ] 6. Integrate CRB check into loan application flow
-  - [-] 6.1 Update the loan application view in `core/views.py`
+  - [ ] 6.1 Update the loan application view in `core/views.py`
     - After creating a new `Loan`, call `CRBService().run_check(loan)` inside the `transaction.atomic()` block (or immediately after, if CRB call should not roll back the loan record)
     - Return `crb_status` in the response payload so the frontend can inform the member
     - If `loan.status == "flagged"`, include a human-readable `flag_reason` in the response
@@ -203,7 +203,7 @@ All status changes produce `Notification` records and `AuditLog` entries. New ad
     - Test `ProtectedMediaView` returns 403 for non-owner/non-admin and 200 for owner and admin
     - _Requirements: 9, 12_
 
-- [~] 8. Checkpoint — backend integration
+- [ ] 8. Checkpoint — backend integration
   - Ensure all backend tests pass (`python manage.py test accounts core`), ask the user if questions arise.
 
 - [x] 9. React frontend — shared components
@@ -228,7 +228,7 @@ All status changes produce `Notification` records and `AuditLog` entries. New ad
     - _Requirements: 13 (VerificationStatusBadge component)_
 
 - [ ] 10. React frontend — member registration update
-  - [-] 10.1 Update `frontend/src/pages/Register.js` to include ID document upload and selfie capture
+  - [ ] 10.1 Update `frontend/src/pages/Register.js` to include ID document upload and selfie capture
     - Import `IDDocumentUpload` and add it to the registration form
     - Import `SelfieCapture` and place it alongside `IDDocumentUpload` in the form
     - Change form submission to use `multipart/form-data` (via `FormData`) instead of JSON; include both `id_document` and `selfie` files when present
@@ -243,19 +243,19 @@ All status changes produce `Notification` records and `AuditLog` entries. New ad
     - Review action: inline form to set status + notes and call `POST .../review/`
     - _Requirements: 9 (selfie preview and face_match_score badge), 13 (AdminIDVerifications page)_
 
-  - [~] 11.2 Create `frontend/src/pages/AdminCRBChecks.js`
+  - [ ] 11.2 Create `frontend/src/pages/AdminCRBChecks.js`
     - Fetch from `GET /api/core/admin/crb-checks/` with status filter tabs (All / Clear / Flagged / Error)
     - Render a table: member name, loan amount, CRB provider, score, active loans count, checked date, status badge
     - Detail panel: raw CRB response, active loans list
     - Override action: inline notes form that calls `POST .../override/` to approve a flagged loan
     - _Requirements: 13 (AdminCRBChecks page)_
 
-  - [~] 11.3 Add routes and sidebar links for new admin pages
+  - [ ] 11.3 Add routes and sidebar links for new admin pages
     - In `frontend/src/App.js`, add `<AdminRoute path="/admin/id-verifications" component={AdminIDVerifications} />` and `<AdminRoute path="/admin/crb-checks" component={AdminCRBChecks} />`
     - In `frontend/src/components/Sidebar.js`, add navigation entries "ID Verifications" and "CRB Checks" under a "Compliance" group, visible only to admins
     - _Requirements: 13_
 
-- [~] 12. Checkpoint — frontend integration
+- [ ] 12. Checkpoint — frontend integration
   - Ensure the frontend builds without errors (`npm run build` in `frontend/`), ask the user if questions arise.
 
 - [x] 13. Add new env vars to `.env.example`
@@ -278,7 +278,7 @@ All status changes produce `Notification` records and `AuditLog` entries. New ad
     - Confirm `react-webcam` appears in `package.json` dependencies and `package-lock.json`
     - _Requirements: 9 (SelfieCapture webcam library)_
 
-- [~] 15. Final checkpoint — full test suite
+- [ ] 15. Final checkpoint — full test suite
   - Ensure all backend tests pass and the frontend build succeeds, ask the user if questions arise.
 
 ---

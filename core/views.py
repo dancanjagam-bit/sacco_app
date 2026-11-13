@@ -4,13 +4,16 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from django.db.models import Sum
+from django.db.models import Sum, Count, Q, CharField
+from django.db.models.functions import Cast
 from django.db.models.functions import TruncMonth
 from django.contrib.auth import get_user_model
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from django.utils.dateparse import parse_date
 
 from .models import Savings, Loan, Transaction, LoanGuarantor
 from .serializers import (
@@ -23,7 +26,7 @@ from .serializers import (
 from .eligibility import (
     get_eligibility,
     get_interest_rate,
-    VALID_PERIODS,
+    get_valid_periods,
 )
 from accounts.models import Notification, AuditLog
 from sacco.notifications import (
@@ -62,35 +65,74 @@ class IsAdmin(BasePermission):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def deposit(request):
+    """
+    Deposit to BOSA or FOSA.
+
+    For regular members: ALL deposits must go through M-Pesa (Daraja STK push).
+    Direct API deposits are blocked — the M-Pesa callback credits the account
+    automatically after Safaricom confirms payment.
+
+    For admin/staff: manual deposits are allowed (cash or bank transfer received
+    at the SACCO office) and are audit-logged with a 'manual_cash' flag.
+    """
+    is_admin = (
+        getattr(request.user, "is_admin", False)
+        or request.user.is_staff
+        or request.user.is_superuser
+    )
+
+    if not is_admin:
+        return Response(
+            {
+                "error": (
+                    "Direct deposits are not allowed. "
+                    "Please use M-Pesa to deposit funds — "
+                    "tap 'Pay via M-Pesa' on the Savings page."
+                )
+            },
+            status=403,
+        )
+
+    # ── Admin manual deposit (cash / bank transfer received at office) ───────
     serializer = SavingsSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     amount       = serializer.validated_data["amount"]
     account_type = serializer.validated_data.get("account_type", "fosa")
 
-    # Enforce mandatory BOSA minimum if account_type is bosa
-    settings_obj = SACCOSettings.get_settings()
+    # Allow admin to deposit on behalf of a specific member
+    target_user_id = request.data.get("user_id")
+    if target_user_id:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            target_user = User.objects.get(id=target_user_id)
+        except User.DoesNotExist:
+            return Response({"error": "Member not found."}, status=404)
+    else:
+        target_user = request.user
 
-    Savings.objects.create(
-        user=request.user,
-        amount=amount,
-        account_type=account_type,
-    )
+    Savings.objects.create(user=target_user, amount=amount, account_type=account_type)
     Transaction.objects.create(
-        user=request.user, type="deposit", amount=amount,
-        note=f"{account_type.upper()} deposit",
+        user=target_user, type="deposit", amount=amount,
+        note=f"{account_type.upper()} manual deposit by {request.user.username}",
     )
     Notification.send(
-        request.user, "Deposit Confirmed",
-        f"KES {amount:,.2f} deposited to your {account_type.upper()} account.",
+        target_user, "Deposit Confirmed",
+        f"KES {amount:,.2f} deposited to your {account_type.upper()} account by SACCO staff.",
         "success", "/savings",
     )
-    AuditLog.log(request.user, "deposit", "", {"amount": float(amount), "account": account_type}, request)
+    AuditLog.log(
+        request.user, "deposit",
+        f"Member {target_user.username}",
+        {"amount": float(amount), "account": account_type, "method": "manual_cash"},
+        request,
+    )
     total_after = float((
-        Savings.objects.filter(user=request.user, account_type=account_type)
+        Savings.objects.filter(user=target_user, account_type=account_type)
         .aggregate(t=Sum("amount"))["t"] or 0
     ))
-    send_deposit_confirmation(request.user, float(amount), total_after)
-    return Response({"message": f"Deposit to {account_type.upper()} successful."})
+    send_deposit_confirmation(target_user, float(amount), total_after)
+    return Response({"message": f"Manual deposit to {account_type.upper()} successful."})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -138,9 +180,10 @@ def apply_loan(request):
     purpose          = serializer.validated_data.get("purpose", "personal")
     purpose_details  = serializer.validated_data.get("purpose_details", "")
 
-    if repayment_months not in VALID_PERIODS:
+    if repayment_months not in get_valid_periods():
+        valid = get_valid_periods()
         return Response(
-            {"error": f"Repayment period must be one of: {VALID_PERIODS}."},
+            {"error": f"Repayment period must be one of: {valid}."},
             status=400,
         )
 
@@ -265,6 +308,16 @@ def approve_loan(request, loan_id):
     }, request)
     deliver_loan_approved(loan.user, loan)
 
+    # Notify all guarantors that the loan they pledged against was approved
+    for g in loan.guarantors.filter(status="accepted"):
+        Notification.send(
+            g.guarantor,
+            "Guaranteed Loan Approved",
+            f"The loan of KES {loan.amount:,.2f} you guaranteed for "
+            f"{loan.user.get_full_name() or loan.user.username} has been approved.",
+            "info", "/loans",
+        )
+
     return Response({
         "message":        "Loan approved.",
         "interest_amount": float(interest_amount),
@@ -303,6 +356,18 @@ def reject_loan(request, loan_id):
         "member": loan.user.username, "reason": loan.remarks,
     }, request)
     deliver_loan_rejected(loan.user, loan)
+
+    # Release guarantors and notify them
+    for g in loan.guarantors.filter(status="accepted"):
+        g.status = "released" if hasattr(g, "released") else g.status
+        Notification.send(
+            g.guarantor,
+            "Guaranteed Loan Not Approved",
+            f"The loan application of KES {loan.amount:,.2f} by "
+            f"{loan.user.get_full_name() or loan.user.username} was not approved. "
+            f"Your guarantee pledge has been released.",
+            "info", "/loans",
+        )
 
     return Response({"message": "Loan rejected."})
 
@@ -369,7 +434,7 @@ def dashboard(request):
     )
 
     loans        = Loan.objects.filter(user=user)
-    transactions = Transaction.objects.filter(user=user)
+    transactions = Transaction.objects.filter(user=user).order_by("-created_at", "-id")
 
     return Response({
         "username":      user.username,
@@ -383,7 +448,12 @@ def dashboard(request):
         "approved_loans": loans.filter(status="approved").count(),
 
         "loans":        LoanSerializer(loans, many=True).data,
-        "transactions": TransactionSerializer(transactions, many=True).data,
+        "transactions": TransactionSerializer(transactions[:25], many=True).data,
+        "transaction_count": transactions.count(),
+
+        # Daraja / M-Pesa fields
+        "daraja_registered": getattr(getattr(user, "member_profile", None), "daraja_registered", False),
+        "phone_number":      getattr(getattr(user, "member_profile", None), "phone_number", ""),
     })
 
 
@@ -447,6 +517,50 @@ def repay_loan(request, loan_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 📋 Complete member transaction history
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_transactions(request):
+    account_transactions = Transaction.objects.filter(user=request.user)
+    summary = account_transactions.aggregate(
+        deposits=Sum("amount", filter=Q(type="deposit")),
+        loans=Sum("amount", filter=Q(type="loan")),
+        repayments=Sum("amount", filter=Q(type="repayment")),
+        withdrawals=Sum("amount", filter=Q(type="withdrawal")),
+        count=Count("id"),
+    )
+    queryset = account_transactions
+    transaction_type = request.query_params.get("type")
+    if transaction_type and transaction_type != "all":
+        queryset = queryset.filter(type=transaction_type)
+    start_date = parse_date(request.query_params.get("from", ""))
+    end_date = parse_date(request.query_params.get("to", ""))
+    if start_date:
+        queryset = queryset.filter(created_at__date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(created_at__date__lte=end_date)
+    search = request.query_params.get("search", "").strip()
+    if search:
+        queryset = queryset.annotate(amount_text=Cast("amount", output_field=CharField())).filter(
+            Q(type__icontains=search) | Q(note__icontains=search) | Q(amount_text__icontains=search)
+        )
+    queryset = queryset.order_by("-created_at", "-id")
+    paginator = PageNumberPagination()
+    paginator.page_size = 50
+    page = paginator.paginate_queryset(queryset, request)
+    response = paginator.get_paginated_response(TransactionSerializer(page, many=True).data)
+    response.data["summary"] = {
+        "deposits": float(summary["deposits"] or 0),
+        "loans": float(summary["loans"] or 0),
+        "repayments": float(summary["repayments"] or 0),
+        "withdrawals": float(summary["withdrawals"] or 0),
+        "count": summary["count"],
+    }
+    return response
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 📊 Export transactions to Excel
 # ─────────────────────────────────────────────────────────────────────────────
 @api_view(["GET"])
@@ -507,6 +621,124 @@ def export_transactions_excel(request):
     resp["Content-Disposition"] = 'attachment; filename="sacco_statement.xlsx"'
     wb.save(resp)
     return resp
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 📋 Arrears / Overdue Loans Report (admin)
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([IsAdmin])
+def arrears_report(request):
+    """
+    Returns all active loans with at least one overdue installment.
+    Buckets by days overdue: 1-30, 31-60, 61-90, 90+ days.
+    """
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+
+    today = date.today()
+    active_loans = Loan.objects.filter(status="approved").select_related("user")
+
+    report = []
+    for loan in active_loans:
+        if not loan.approved_at:
+            continue
+
+        total_payable   = loan.amount + (loan.amount * loan.interest / Decimal("100"))
+        monthly_payment = total_payable / loan.repayment_months
+        start_date      = loan.approved_at
+
+        oldest_overdue_days = 0
+        overdue_installments = 0
+        overdue_amount = Decimal("0")
+
+        repayments = list(
+            Transaction.objects.filter(
+                user=loan.user, type="repayment",
+                note__contains=f"Loan #{loan.id}",
+            ).order_by("created_at")
+        )
+
+        for i in range(1, loan.repayment_months + 1):
+            due_date = (start_date + relativedelta(months=i)).date()
+            if due_date > today:
+                break  # future installments
+
+            paid = repayments[i - 1].amount if i <= len(repayments) else Decimal("0")
+            if paid < monthly_payment:
+                days_late = (today - due_date).days
+                if days_late > oldest_overdue_days:
+                    oldest_overdue_days = days_late
+                overdue_installments += 1
+                overdue_amount += (monthly_payment - paid)
+
+        if overdue_installments == 0:
+            continue
+
+        # Bucket by days overdue
+        if oldest_overdue_days <= 30:
+            bucket = "1-30 days"
+        elif oldest_overdue_days <= 60:
+            bucket = "31-60 days"
+        elif oldest_overdue_days <= 90:
+            bucket = "61-90 days"
+        else:
+            bucket = "90+ days"
+
+        try:
+            member_number = loan.user.member_profile.member_number
+        except Exception:
+            member_number = "—"
+
+        report.append({
+            "loan_id":             loan.id,
+            "member":              loan.user.get_full_name() or loan.user.username,
+            "member_number":       member_number,
+            "phone":               getattr(getattr(loan.user, "member_profile", None), "phone_number", ""),
+            "loan_amount":         float(loan.amount),
+            "outstanding_balance": float(loan.balance),
+            "overdue_installments": overdue_installments,
+            "overdue_amount":      float(overdue_amount),
+            "oldest_overdue_days": oldest_overdue_days,
+            "bucket":              bucket,
+            "monthly_payment":     float(monthly_payment),
+        })
+
+    # Sort worst first
+    report.sort(key=lambda x: x["oldest_overdue_days"], reverse=True)
+
+    # Summary buckets
+    buckets = {}
+    for r in report:
+        b = r["bucket"]
+        if b not in buckets:
+            buckets[b] = {"count": 0, "total_overdue": 0.0}
+        buckets[b]["count"] += 1
+        buckets[b]["total_overdue"] += r["overdue_amount"]
+
+    return Response({
+        "total_delinquent_loans": len(report),
+        "total_overdue_amount":   sum(r["overdue_amount"] for r in report),
+        "buckets":                buckets,
+        "loans":                  report,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🏢 Public SACCO config — branding, paybill info (no auth required)
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(["GET"])
+@permission_classes([])
+def sacco_public_config(request):
+    from django.conf import settings as django_settings
+    return Response({
+        "name":       django_settings.SACCO_NAME,
+        "short_name": django_settings.SACCO_SHORT_NAME,
+        "address":    django_settings.SACCO_ADDRESS,
+        "phone":      django_settings.SACCO_PHONE,
+        "email":      django_settings.SACCO_EMAIL,
+        "paybill":    django_settings.SACCO_PAYBILL,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -836,107 +1068,554 @@ def savings_statement(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_statement_pdf(request):
+    # ── Imports ────────────────────────────────────────────────────────────
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
-    from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.units import cm, mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph,
+        Spacer, HRFlowable, KeepTogether,
+    )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+    from reportlab.graphics.shapes import Drawing, Rect, String, Circle, Line
+    from reportlab.graphics import renderPDF
     from io import BytesIO
+    import math
 
+    # ── Colour palette ──────────────────────────────────────────────────────
+    C_NAVY    = colors.HexColor("#0b1437")   # deep midnight navy
+    C_INDIGO  = colors.HexColor("#4f46e5")   # electric indigo (primary brand)
+    C_EMERALD = colors.HexColor("#10b981")   # emerald green (credit)
+    C_ROSE    = colors.HexColor("#e11d48")   # rose red (debit)
+    C_GOLD    = colors.HexColor("#f59e0b")   # gold accent
+    C_MUTED   = colors.HexColor("#64748b")   # slate muted
+    C_BORDER  = colors.HexColor("#e2e8f0")   # light border
+    C_BG_SOFT = colors.HexColor("#f0f4ff")   # soft indigo bg
+    C_BG_ROW  = colors.HexColor("#fafbff")   # alternating row tint
+    C_WHITE   = colors.white
+
+    # ── Data collection ─────────────────────────────────────────────────────
     user  = request.user
+    now   = timezone.now()
+
+    # Date range from query params (default: last 3 months)
     try:
-        member = user.member_profile
+        from_date_str = request.query_params.get("from")
+        to_date_str   = request.query_params.get("to")
+        from django.utils.dateparse import parse_date
+        from datetime import timedelta
+        if from_date_str:
+            from_dt = timezone.make_aware(
+                timezone.datetime.combine(parse_date(from_date_str), timezone.datetime.min.time())
+            )
+        else:
+            from_dt = now - timedelta(days=90)
+        if to_date_str:
+            to_dt = timezone.make_aware(
+                timezone.datetime.combine(parse_date(to_date_str), timezone.datetime.max.time())
+            )
+        else:
+            to_dt = now
+    except Exception:
+        from datetime import timedelta
+        from_dt = now - timedelta(days=90)
+        to_dt   = now
+
+    try:
+        member        = user.member_profile
         member_number = member.member_number
+        phone         = member.phone_number
+        county        = member.county
+        address       = member.address
+        date_joined   = member.date_joined
     except Exception:
         member_number = "N/A"
+        phone         = user.email
+        county        = ""
+        address       = ""
+        date_joined   = user.date_joined
 
+    full_name = user.get_full_name() or user.username
+
+    total_savings_val = float(
+        Savings.objects.filter(user=user).aggregate(t=Sum("amount"))["t"] or 0
+    )
+    bosa_balance = float(
+        Savings.objects.filter(user=user, account_type="bosa").aggregate(t=Sum("amount"))["t"] or 0
+    )
+    fosa_balance = float(
+        Savings.objects.filter(user=user, account_type="fosa").aggregate(t=Sum("amount"))["t"] or 0
+    )
+
+    txns = Transaction.objects.filter(
+        user=user,
+        created_at__gte=from_dt,
+        created_at__lte=to_dt,
+    ).order_by("created_at")
+
+    total_credit = sum(float(t.amount) for t in txns if t.type in ("deposit",))
+    total_debit  = sum(float(t.amount) for t in txns if t.type in ("withdrawal", "repayment"))
+
+    # ── Document setup ──────────────────────────────────────────────────────
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm,
-                             leftMargin=2*cm, rightMargin=2*cm)
-    styles = getSampleStyleSheet()
-    story  = []
+    PAGE_W, PAGE_H = A4
+    L_MARGIN = 1.8 * cm
+    R_MARGIN = 1.8 * cm
+    T_MARGIN = 1.5 * cm
+    B_MARGIN = 2.0 * cm
+    USABLE_W = PAGE_W - L_MARGIN - R_MARGIN
 
-    # Title
-    title_style = ParagraphStyle("title", parent=styles["Heading1"],
-                                  fontSize=18, textColor=colors.HexColor("#1e3a8a"),
-                                  spaceAfter=4)
-    sub_style   = ParagraphStyle("sub",   parent=styles["Normal"],
-                                  fontSize=10, textColor=colors.HexColor("#64748b"),
-                                  spaceAfter=2)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        topMargin=T_MARGIN,
+        bottomMargin=B_MARGIN,
+        leftMargin=L_MARGIN,
+        rightMargin=R_MARGIN,
+        title=f"Account Statement — {full_name}",
+        author="Nairobi West Transport Cooperative Society",
+    )
 
-    story.append(Paragraph("SACCO Management System", title_style))
-    story.append(Paragraph("Member Transaction Statement", sub_style))
-    story.append(Paragraph(f"Member: {user.get_full_name() or user.username}  |  "
-                            f"Member No: {member_number}  |  "
-                            f"Generated: {timezone.now().strftime('%d %B %Y %H:%M')}", sub_style))
-    story.append(Spacer(1, 0.4*cm))
+    styles  = getSampleStyleSheet()
+    story   = []
 
-    # Summary boxes
-    total_savings = float(Savings.objects.filter(user=user).aggregate(t=Sum("amount"))["t"] or 0)
-    loans_qs      = Loan.objects.filter(user=user)
-    active_loan   = loans_qs.filter(status="approved", balance__gt=0).first()
+    # ── Paragraph styles ────────────────────────────────────────────────────
+    def ps(name, **kw):
+        base = kw.pop("base", "Normal")
+        return ParagraphStyle(name, parent=styles[base], **kw)
 
-    summary_data = [
-        ["Total Savings", f"KES {total_savings:,.2f}"],
-        ["Total Loans",   str(loans_qs.count())],
-        ["Active Loan Balance", f"KES {float(active_loan.balance):,.2f}" if active_loan else "None"],
-    ]
-    summary_table = Table(summary_data, colWidths=[6*cm, 8*cm])
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#eff6ff")),
-        ("FONTNAME",   (0,0), (0,-1), "Helvetica-Bold"),
-        ("FONTSIZE",   (0,0), (-1,-1), 10),
-        ("GRID",       (0,0), (-1,-1), 0.5, colors.HexColor("#bfdbfe")),
-        ("ROWBACKGROUNDS", (0,0), (-1,-1), [colors.HexColor("#eff6ff"), colors.white]),
-        ("PADDING",    (0,0), (-1,-1), 6),
-    ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 0.5*cm))
+    ORG_NAME_STYLE  = ps("orgName",   fontSize=15, textColor=C_NAVY,   fontName="Helvetica-Bold",
+                          leading=18, spaceBefore=0, spaceAfter=1)
+    ORG_SUB_STYLE   = ps("orgSub",    fontSize=8.5, textColor=C_MUTED, fontName="Helvetica",
+                          leading=11, spaceAfter=1)
+    STMT_HDR_STYLE  = ps("stmtHdr",   fontSize=20, textColor=C_INDIGO, fontName="Helvetica-Bold",
+                          leading=24, spaceAfter=0)
+    STMT_SUB_STYLE  = ps("stmtSub",   fontSize=9,  textColor=C_MUTED,  fontName="Helvetica",
+                          leading=12, spaceAfter=0)
+    MEMBER_STYLE    = ps("memInfo",   fontSize=9.5, textColor=C_NAVY,  fontName="Helvetica-Bold",
+                          leading=13)
+    MEMBER_SUB      = ps("memSub",    fontSize=8.5, textColor=C_MUTED, fontName="Helvetica",
+                          leading=12)
+    SECTION_TITLE   = ps("secTitle",  fontSize=9,  textColor=C_WHITE,  fontName="Helvetica-Bold",
+                          leading=11)
+    CELL_NORMAL     = ps("cellNorm",  fontSize=8.5, textColor=C_NAVY,  fontName="Helvetica",
+                          leading=11)
+    CELL_BOLD       = ps("cellBold",  fontSize=8.5, textColor=C_NAVY,  fontName="Helvetica-Bold",
+                          leading=11)
+    CELL_CREDIT     = ps("cellCred",  fontSize=8.5, textColor=C_EMERALD, fontName="Helvetica-Bold",
+                          leading=11, alignment=TA_RIGHT)
+    CELL_DEBIT      = ps("cellDeb",   fontSize=8.5, textColor=C_ROSE,  fontName="Helvetica-Bold",
+                          leading=11, alignment=TA_RIGHT)
+    CELL_BALANCE    = ps("cellBal",   fontSize=8.5, textColor=C_NAVY,  fontName="Helvetica-Bold",
+                          leading=11, alignment=TA_RIGHT)
+    CELL_MUTED_R    = ps("cellMR",    fontSize=8,   textColor=C_MUTED, fontName="Helvetica",
+                          leading=10, alignment=TA_RIGHT)
+    CELL_MUTED_C    = ps("cellMC",    fontSize=8,   textColor=C_MUTED, fontName="Helvetica",
+                          leading=10, alignment=TA_CENTER)
+    FOOTER_STYLE    = ps("footer",    fontSize=7.5, textColor=C_MUTED, fontName="Helvetica",
+                          leading=10, alignment=TA_CENTER)
+    DISCLAIMER_STYLE = ps("disclaim", fontSize=7, textColor=C_MUTED, fontName="Helvetica",
+                          leading=9, alignment=TA_CENTER)
 
-    # Transactions
-    story.append(Paragraph("Transaction History", styles["Heading2"]))
-    story.append(Spacer(1, 0.2*cm))
+    # ── ① HEADER SECTION — Logo left, "Account Statement" right ─────────────
+    # Left: org logo placeholder + name stack
+    # Right: "Account Statement" big text
+    # (Mirrors Equity Bank layout: org branding left, statement title right)
 
-    txns     = Transaction.objects.filter(user=user).order_by("-created_at")
-    tx_data  = [["#", "Date", "Type", "Note", "Amount (KES)"]]
-    for i, t in enumerate(txns, 1):
-        sign = "+" if t.type in ("deposit",) else ("−" if t.type in ("withdrawal",) else "")
-        tx_data.append([
-            str(i),
-            t.created_at.strftime("%d/%m/%Y"),
-            t.type.title(),
-            t.note[:40] if t.note else "",
-            f"{sign} {float(t.amount):,.2f}",
+    def _draw_logo_mark(drawing, x, y, sz):
+        """Draw the NW Transport logo mark onto a ReportLab Drawing."""
+        from reportlab.graphics.shapes import (
+            Rect as RLRect, Circle as RLCircle, Line as RLLine,
+            Polygon as RLPolygon, Path as RLPath,
+        )
+        indigo_hex  = "#4f46e5"
+        emerald_hex = "#10b981"
+        gold_hex    = "#f59e0b"
+        navy_hex    = "#0b1437"
+        scale = sz / 80.0
+
+        def sc(v): return v * scale
+
+        # Outer circle ring
+        c_outer = RLCircle(x + sc(40), y + sc(40), sc(37))
+        c_outer.strokeColor = colors.HexColor(indigo_hex)
+        c_outer.strokeWidth = sc(3)
+        c_outer.fillColor   = colors.HexColor("#eef2ff")
+        drawing.add(c_outer)
+
+        # Bus body
+        body = RLRect(x + sc(14), y + sc(25), sc(52), sc(18))
+        body.fillColor = colors.HexColor(indigo_hex)
+        body.strokeColor = None
+        drawing.add(body)
+
+        # Roof / cab top
+        roof = RLRect(x + sc(18), y + sc(34), sc(44), sc(10))
+        roof.fillColor = colors.HexColor(indigo_hex)
+        roof.strokeColor = None
+        drawing.add(roof)
+
+        # Windscreen
+        wind = RLPolygon([
+            x + sc(23), y + sc(34),
+            x + sc(26), y + sc(28),
+            x + sc(54), y + sc(28),
+            x + sc(57), y + sc(34),
         ])
+        wind.fillColor   = colors.HexColor("#eef2ff")
+        wind.strokeColor = None
+        drawing.add(wind)
 
-    if len(tx_data) > 1:
-        tx_table = Table(tx_data, colWidths=[1*cm, 2.8*cm, 3*cm, 5*cm, 3.5*cm])
-        tx_table.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0),   colors.HexColor("#1e3a8a")),
-            ("TEXTCOLOR",  (0,0), (-1,0),   colors.white),
-            ("FONTNAME",   (0,0), (-1,0),   "Helvetica-Bold"),
-            ("FONTSIZE",   (0,0), (-1,-1),  9),
-            ("GRID",       (0,0), (-1,-1),  0.3, colors.HexColor("#e2e8f0")),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
-            ("ALIGN",      (0,0), (-1,-1),  "LEFT"),
-            ("PADDING",    (0,0), (-1,-1),  5),
-        ]))
+        # Wheels
+        for wx in [24, 56]:
+            w = RLCircle(x + sc(wx), y + sc(18), sc(5))
+            w.fillColor = colors.HexColor(navy_hex)
+            w.strokeColor = colors.white
+            w.strokeWidth = sc(1.5)
+            drawing.add(w)
+            wh = RLCircle(x + sc(wx), y + sc(18), sc(2.5))
+            wh.fillColor = colors.HexColor(indigo_hex)
+            wh.strokeColor = None
+            drawing.add(wh)
+
+        # Undercarriage bar
+        bar = RLRect(x + sc(18), y + sc(19), sc(44), sc(3))
+        bar.fillColor = colors.HexColor(navy_hex)
+        bar.strokeColor = None
+        drawing.add(bar)
+
+        # Road line
+        road = RLLine(x + sc(10), y + sc(10), x + sc(70), y + sc(10))
+        road.strokeColor = colors.HexColor(emerald_hex)
+        road.strokeWidth = sc(2.5)
+        drawing.add(road)
+
+        # Gold arc monogram — bezier path (Arc is not available in all reportlab versions)
+        cx = x + sc(40)
+        cy = y + sc(50)
+        rx = sc(18)
+        ry = sc(8)
+        k  = 0.5523  # cubic bezier approximation for quarter-circle
+        arc_path = RLPath()
+        arc_path.moveTo(cx - rx, cy)
+        arc_path.curveTo(cx - rx, cy + ry * k,  cx - rx * k, cy + ry,  cx,       cy + ry)
+        arc_path.curveTo(cx + rx * k, cy + ry,  cx + rx, cy + ry * k,  cx + rx,  cy)
+        arc_path.strokeColor = colors.HexColor(gold_hex)
+        arc_path.strokeWidth = sc(2.2)
+        arc_path.fillColor   = None
+        drawing.add(arc_path)
+
+        return drawing
+
+    LOGO_SZ = 58   # px equivalent in the drawing
+    logo_drawing = Drawing(LOGO_SZ * 0.75, LOGO_SZ * 0.75)
+    _draw_logo_mark(logo_drawing, 0, 0, LOGO_SZ * 0.75)
+
+    # Header table: [LOGO + ORG NAME | spacer | "Account Statement"]
+    org_name_cell = [
+        Paragraph("NAIROBI WEST TRANSPORT", ORG_NAME_STYLE),
+        Paragraph("COOPERATIVE SOCIETY", ps("orgName2", fontSize=12, textColor=C_NAVY,
+                   fontName="Helvetica-Bold", leading=14, spaceBefore=0, spaceAfter=2)),
+        Paragraph("Nairobi West, Nairobi County, Kenya", ORG_SUB_STYLE),
+        Paragraph("Tel: +254 700 000 000  |  info@nwtcs.co.ke", ORG_SUB_STYLE),
+        Paragraph("www.nwtcs.co.ke", ORG_SUB_STYLE),
+    ]
+    stmt_title_cell = [
+        Paragraph("Account", STMT_HDR_STYLE),
+        Paragraph("Statement", STMT_HDR_STYLE),
+        Spacer(1, 4),
+        Paragraph(f"Statement Date: {now.strftime('%d/%m/%Y')}", STMT_SUB_STYLE),
+        Paragraph(f"Generated: {now.strftime('%d %B %Y, %H:%M')}", STMT_SUB_STYLE),
+    ]
+
+    logo_col = [[logo_drawing, Spacer(1, 4)] + org_name_cell]
+
+    header_table = Table(
+        [[logo_col, "", stmt_title_cell]],
+        colWidths=[USABLE_W * 0.52, USABLE_W * 0.04, USABLE_W * 0.44],
+    )
+    header_table.setStyle(TableStyle([
+        ("VALIGN",  (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",   (2, 0), (2, 0),   "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 2, C_INDIGO),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 0.5 * cm))
+
+    # ── ② MEMBER INFO + ACCOUNT DETAILS (2-column box like Equity) ──────────
+    # Left: member name/address/contact
+    # Right: account meta (number, currency, branch, period)
+
+    member_info_rows = [
+        Paragraph(full_name.upper(), MEMBER_STYLE),
+        Paragraph(address or county or "Kenya", MEMBER_SUB),
+        Paragraph(phone or "", MEMBER_SUB),
+        Paragraph(user.email or "", MEMBER_SUB),
+    ]
+    account_meta_rows = [
+        ["Member Number",   member_number],
+        ["Currency",        "KES"],
+        ["Branch / Region", "Nairobi West"],
+        ["Statement Date",  now.strftime("%d/%m/%Y")],
+        ["Statement Period",f"{from_dt.strftime('%d/%m/%Y')} – {to_dt.strftime('%d/%m/%Y')}"],
+        ["Member Since",    date_joined.strftime("%d/%m/%Y") if date_joined else "—"],
+    ]
+
+    meta_table = Table(
+        [[f, v] for f, v in account_meta_rows],
+        colWidths=[3.8 * cm, 5.4 * cm],
+    )
+    meta_table.setStyle(TableStyle([
+        ("FONTNAME",  (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME",  (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE",  (0, 0), (-1, -1), 8.5),
+        ("TEXTCOLOR", (0, 0), (0, -1),  C_MUTED),
+        ("TEXTCOLOR", (1, 0), (1, -1),  C_NAVY),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, C_BORDER),
+        ("BACKGROUND", (0, 0), (-1, -1), C_BG_SOFT),
+        ("BOX", (0, 0), (-1, -1), 0.5, C_BORDER),
+    ]))
+
+    info_table = Table(
+        [[member_info_rows, meta_table]],
+        colWidths=[USABLE_W * 0.48, USABLE_W * 0.52],
+    )
+    info_table.setStyle(TableStyle([
+        ("VALIGN",  (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 0.5 * cm))
+
+    # ── ③ SAVINGS SUMMARY BOXES (3-up KPI row) ──────────────────────────────
+    kpi_data = [
+        ["TOTAL SAVINGS", f"KES {total_savings_val:>12,.2f}", C_INDIGO],
+        ["BOSA BALANCE",  f"KES {bosa_balance:>12,.2f}",  C_EMERALD],
+        ["FOSA BALANCE",  f"KES {fosa_balance:>12,.2f}",  C_NAVY],
+    ]
+    kpi_cells = []
+    for label, value, col in kpi_data:
+        kpi_cells.append([
+            Paragraph(label, ps(f"kpi_l_{label}", fontSize=7.5, textColor=C_MUTED,
+                                fontName="Helvetica-Bold", leading=9, spaceAfter=3)),
+            Paragraph(value, ps(f"kpi_v_{label}", fontSize=12, textColor=col,
+                                fontName="Helvetica-Bold", leading=15)),
+        ])
+    kpi_col_w = USABLE_W / 3 - 0.1 * cm
+    kpi_table = Table(
+        [kpi_cells],
+        colWidths=[kpi_col_w] * 3,
+        rowHeights=[1.6 * cm],
+    )
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), C_WHITE),
+        ("BOX",           (0, 0), (0, 0),   0.6, C_INDIGO),
+        ("BOX",           (1, 0), (1, 0),   0.6, C_EMERALD),
+        ("BOX",           (2, 0), (2, 0),   0.6, C_NAVY),
+        ("LINEABOVE",     (0, 0), (0, 0),   3,   C_INDIGO),
+        ("LINEABOVE",     (1, 0), (1, 0),   3,   C_EMERALD),
+        ("LINEABOVE",     (2, 0), (2, 0),   3,   C_NAVY),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ("TOPPADDING",    (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    story.append(kpi_table)
+    story.append(Spacer(1, 0.55 * cm))
+
+    # ── ④ TRANSACTIONS TABLE ─────────────────────────────────────────────────
+    # Header row — full-width midnight navy band (Equity Bank style)
+    TX_COLS = ["Transaction Details", "Ref No.", "Value Date", "Credit (Money In)", "Debit (Money Out)", "Balance"]
+    COL_W   = [USABLE_W*0.34, USABLE_W*0.14, USABLE_W*0.10, USABLE_W*0.12, USABLE_W*0.14, USABLE_W*0.16]
+
+    def _tx_hdr(text):
+        return Paragraph(text, ps(f"txh_{text[:5]}", fontSize=8, textColor=C_WHITE,
+                                   fontName="Helvetica-Bold", leading=10, alignment=TA_LEFT))
+    def _tx_hdr_r(text):
+        return Paragraph(text, ps(f"txhr_{text[:5]}", fontSize=8, textColor=C_WHITE,
+                                   fontName="Helvetica-Bold", leading=10, alignment=TA_RIGHT))
+
+    tx_rows = [
+        [_tx_hdr("Transaction Details"), _tx_hdr("Payment Reference"),
+         _tx_hdr_r("Value Date"), _tx_hdr_r("Credit\n(Money In)"),
+         _tx_hdr_r("Debit\n(Money Out)"), _tx_hdr_r("Balance")],
+    ]
+
+    # Running balance calculation
+    running_balance = total_savings_val
+    prev_txns_total = float(
+        Transaction.objects.filter(
+            user=user, created_at__lt=from_dt
+        ).aggregate(
+            t=Sum("amount")
+        )["t"] or 0
+    )
+    running_balance = prev_txns_total  # start from what was there before period
+
+    row_styles = []
+    for i, t in enumerate(txns, 1):
+        amount = float(t.amount)
+        is_credit = t.type in ("deposit",)
+        is_debit  = t.type in ("withdrawal", "repayment")
+
+        if is_credit:
+            running_balance += amount
+            credit_str = f"{amount:,.2f}"
+            debit_str  = ""
+        elif is_debit:
+            running_balance -= amount
+            credit_str = ""
+            debit_str  = f"{amount:,.2f}"
+        else:
+            # loan disbursement — credit
+            running_balance += amount
+            credit_str = f"{amount:,.2f}"
+            debit_str  = ""
+
+        # ── Build a meaningful SACCO description for each transaction type ──
+        TYPE_LABELS = {
+            "deposit":    "Savings Deposit",
+            "withdrawal": "Savings Withdrawal",
+            "repayment":  "Loan Repayment",
+            "loan":       "Loan Disbursement",
+            "dividend":   "Dividend Payout",
+        }
+        base_label = TYPE_LABELS.get(t.type, t.type.replace("_", " ").title())
+
+        # Determine account type hint from note for deposits
+        if t.type == "deposit":
+            note_upper = (t.note or "").upper()
+            if "BOSA" in note_upper:
+                base_label = "Savings Deposit — BOSA"
+            elif "FOSA" in note_upper:
+                base_label = "Savings Deposit — FOSA"
+            else:
+                base_label = "Savings Deposit"
+
+        detail_lines = base_label
+        # Add note on second line if it adds real information
+        if t.note and t.note.strip().upper() not in (
+            base_label.upper(), t.type.upper(), "BOSA DEPOSIT", "FOSA DEPOSIT",
+            f"{base_label.upper()} DEPOSIT",
+        ):
+            detail_lines += f"\n{t.note[:55]}"
+
+        row = [
+            Paragraph(detail_lines, ps(f"td_{i}", fontSize=8, textColor=C_NAVY,
+                                        fontName="Helvetica", leading=10)),
+            Paragraph(f"TX{t.id:08d}", ps(f"tr_{i}", fontSize=7.5, textColor=C_MUTED,
+                                           fontName="Helvetica", leading=10)),
+            Paragraph(t.created_at.strftime("%d/%m/%Y"), CELL_MUTED_C),
+            Paragraph(credit_str, CELL_CREDIT) if credit_str else Paragraph("", CELL_NORMAL),
+            Paragraph(debit_str,  CELL_DEBIT)  if debit_str  else Paragraph("", CELL_NORMAL),
+            Paragraph(f"{running_balance:,.2f}", CELL_BALANCE),
+        ]
+        tx_rows.append(row)
+
+        # Alternate row shading
+        bg = C_WHITE if i % 2 == 1 else C_BG_ROW
+        row_styles.append(("BACKGROUND", (0, i), (-1, i), bg))
+
+    # Totals row
+    tx_rows.append([
+        Paragraph("Total", ps("tottxt", fontSize=9, textColor=C_NAVY,
+                               fontName="Helvetica-Bold", leading=11)),
+        Paragraph("", CELL_NORMAL),
+        Paragraph("", CELL_NORMAL),
+        Paragraph(f"{total_credit:,.2f}",
+                  ps("totcr", fontSize=9, textColor=C_EMERALD, fontName="Helvetica-Bold",
+                     leading=11, alignment=TA_RIGHT)),
+        Paragraph(f"{total_debit:,.2f}",
+                  ps("totdb", fontSize=9, textColor=C_ROSE, fontName="Helvetica-Bold",
+                     leading=11, alignment=TA_RIGHT)),
+        Paragraph(f"{running_balance:,.2f}",
+                  ps("totbal", fontSize=9, textColor=C_NAVY, fontName="Helvetica-Bold",
+                     leading=11, alignment=TA_RIGHT)),
+    ])
+
+    total_row_idx = len(tx_rows) - 1
+
+    tx_table = Table(tx_rows, colWidths=COL_W, repeatRows=1)
+    base_styles = [
+        # Header band
+        ("BACKGROUND",    (0, 0), (-1, 0), C_NAVY),
+        ("TOPPADDING",    (0, 0), (-1, 0), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+        # All cells
+        ("FONTSIZE",      (0, 0), (-1, -1), 8.5),
+        ("TOPPADDING",    (0, 1), (-1, -2), 5),
+        ("BOTTOMPADDING", (0, 1), (-1, -2), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        # Grid — light
+        ("GRID",          (0, 0), (-1, -1), 0.25, C_BORDER),
+        ("LINEBELOW",     (0, 0), (-1, 0),  1.0, C_BORDER),
+        # Totals row
+        ("BACKGROUND",    (0, total_row_idx), (-1, total_row_idx), C_BG_SOFT),
+        ("LINEABOVE",     (0, total_row_idx), (-1, total_row_idx), 1.2, C_INDIGO),
+        ("TOPPADDING",    (0, total_row_idx), (-1, total_row_idx), 7),
+        ("BOTTOMPADDING", (0, total_row_idx), (-1, total_row_idx), 7),
+    ] + row_styles
+
+    tx_table.setStyle(TableStyle(base_styles))
+
+    if len(tx_rows) > 1:
         story.append(tx_table)
     else:
-        story.append(Paragraph("No transactions on record.", styles["Normal"]))
+        story.append(Paragraph("No transactions found in this statement period.",
+                                ps("notx", fontSize=9, textColor=C_MUTED, fontName="Helvetica-Oblique")))
 
-    story.append(Spacer(1, 0.5*cm))
-    story.append(Paragraph("— End of Statement —",
-                            ParagraphStyle("footer", parent=styles["Normal"],
-                                           fontSize=8, textColor=colors.HexColor("#94a3b8"),
-                                           alignment=1)))
+    story.append(Spacer(1, 0.8 * cm))
 
-    doc.build(story)
+    # ── ⑤ FOOTER — disclaimer + page info ───────────────────────────────────
+    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER))
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph(
+        "Disclaimer: This record is produced for your personal use and is not transferable. "
+        "Contact us for 24-hour assistance on <b>+254 700 000 000</b> or email "
+        "<b>info@nwtcs.co.ke</b>. "
+        "<i>*****COMPUTER GENERATED STATEMENT*****</i>",
+        DISCLAIMER_STYLE,
+    ))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(Paragraph(
+        f"Nairobi West Transport Cooperative Society  ·  "
+        f"Nairobi West, Nairobi County, Kenya  ·  "
+        f"Printed: {now.strftime('%d/%m/%Y  %H:%M')}   Page 1",
+        FOOTER_STYLE,
+    ))
+
+    # ── Build ────────────────────────────────────────────────────────────────
+    def _on_page(canvas_obj, doc_obj):
+        """Draw a subtle indigo accent stripe at top and bottom of every page."""
+        canvas_obj.saveState()
+        # Top stripe
+        canvas_obj.setFillColor(C_INDIGO)
+        canvas_obj.rect(0, PAGE_H - 6, PAGE_W, 6, fill=1, stroke=0)
+        # Gold accent line below top stripe
+        canvas_obj.setFillColor(C_GOLD)
+        canvas_obj.rect(0, PAGE_H - 9, PAGE_W, 3, fill=1, stroke=0)
+        # Bottom stripe
+        canvas_obj.setFillColor(C_INDIGO)
+        canvas_obj.rect(0, 0, PAGE_W, 5, fill=1, stroke=0)
+        canvas_obj.restoreState()
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     buf.seek(0)
 
     response = HttpResponse(buf, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="sacco_statement_{user.username}.pdf"'
-    AuditLog.log(user, "export", "PDF statement", request=request)
+    response["Content-Disposition"] = (
+        f'attachment; filename="NWTCS_Statement_{member_number}_{now.strftime("%Y%m%d")}.pdf"'
+    )
+    AuditLog.log(user, "export", f"PDF statement {member_number}", request=request)
     return response
 
 
@@ -1352,6 +2031,8 @@ def sacco_settings(request):
             "min_savings_retention":    float(settings.min_savings_retention),
             "sasra_enabled":            settings.sasra_enabled,
             "sasra_report_interval_days": settings.sasra_report_interval_days,
+            "mandatory_monthly_bosa":   float(settings.mandatory_monthly_bosa),
+            "bosa_exit_hold_days":      settings.bosa_exit_hold_days,
         })
 
     # PUT
@@ -1360,6 +2041,10 @@ def sacco_settings(request):
     settings.min_savings_retention    = Decimal(str(request.data.get("min_savings_retention", settings.min_savings_retention)))
     settings.sasra_enabled            = request.data.get("sasra_enabled", settings.sasra_enabled)
     settings.sasra_report_interval_days = int(request.data.get("sasra_report_interval_days", settings.sasra_report_interval_days))
+    if "mandatory_monthly_bosa" in request.data:
+        settings.mandatory_monthly_bosa = Decimal(str(request.data["mandatory_monthly_bosa"]))
+    if "bosa_exit_hold_days" in request.data:
+        settings.bosa_exit_hold_days = int(request.data["bosa_exit_hold_days"])
     settings.save()
 
     AuditLog.log(request.user, "other", "SACCO settings updated",

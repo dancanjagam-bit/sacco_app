@@ -14,6 +14,9 @@ logger = logging.getLogger("sacco")
 def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
     if not to_email:
         return
+    if not getattr(settings, "EMAIL_HOST", ""):
+        logger.warning("Email notification skipped because SMTP is not configured")
+        return
     try:
         send_mail(
             subject=subject,
@@ -23,9 +26,9 @@ def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
             html_message=html_body,
             fail_silently=False,
         )
-        logger.info("Email sent to %s", to_email)
+        logger.info("Email notification sent")
     except Exception as e:
-        logger.error("Email failed to %s: %s", to_email, type(e).__name__)
+        logger.error("Email notification failed (%s)", type(e).__name__)
 
 
 def _send_sms(to_phone: str, message: str):
@@ -34,9 +37,8 @@ def _send_sms(to_phone: str, message: str):
     at_api_key  = getattr(settings, "AT_API_KEY", "")
 
     if not at_username or not at_api_key:
-        # Dev fallback — just log it
-        logger.info(f"[SMS -> {to_phone}] {message}")
-        print(f"\n[SMS -> {to_phone}]\n{message}\n")
+        # Never write OTPs or financial notifications to logs or the console.
+        logger.warning("SMS delivery skipped because Africa's Talking is not configured")
         return
 
     try:
@@ -48,9 +50,9 @@ def _send_sms(to_phone: str, message: str):
         if phone.startswith("0"):
             phone = "+254" + phone[1:]
         response = sms.send(message, [phone])
-        logger.info(f"SMS sent to {phone}: {response}")
+        logger.info("SMS notification submitted to provider")
     except Exception as e:
-        logger.error(f"SMS failed to {to_phone}: {e}")
+        logger.error("SMS notification failed (%s)", type(e).__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
