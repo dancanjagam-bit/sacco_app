@@ -26,6 +26,7 @@ Thumbs.db
 .vscode/
 cloudflared.exe
 media/
+backups/
 test_err.txt
 test_out.txt
 *.sqlite3-journal
