@@ -214,3 +214,7 @@ xmlschema==2.5.1
 yappi==1.7.6
 zipp==4.1.0
 zopfli==0.4.3
+
+# Deployment dependencies
+dj-database-url==2.3.0
+psycopg2-binary==2.9.10

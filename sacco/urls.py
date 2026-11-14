@@ -2,11 +2,15 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from django.conf import settings
+from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenRefreshView
 from accounts.auth_views import custom_token_obtain
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+
+    # Health check endpoint for Render / uptime monitoring
+    path("api/health/", lambda request: JsonResponse({"status": "ok", "service": "sacco-backend"})),
 
     # API
     path("api/", include("accounts.urls")),

@@ -32,7 +32,7 @@ if not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5):
     raise RuntimeError("SECRET_KEY must be a unique value of at least 50 characters in production.")
 ALLOWED_HOSTS = [
     h.strip()
-    for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+    for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,.onrender.com").split(",")
     if h.strip()
 ]
 if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
@@ -104,7 +104,14 @@ TEMPLATES = [
 # ─────────────────────────────────────────────────────────────────────────────
 # Database
 # ─────────────────────────────────────────────────────────────────────────────
-if os.getenv("USE_POSTGRES", "0").lower() in {"1", "true", "yes", "on"}:
+# Render provides DATABASE_URL automatically. Parse it if present.
+# Otherwise fall back to explicit PG vars or SQLite.
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=60)}
+elif os.getenv("USE_POSTGRES", "0").lower() in {"1", "true", "yes", "on"}:
     DATABASES = {
         "default": {
             "ENGINE":   "django.db.backends.postgresql",
