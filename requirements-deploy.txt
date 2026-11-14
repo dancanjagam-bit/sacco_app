@@ -36,6 +36,7 @@ pillow==12.1.0
 platformdirs==4.10.0
 pluggy==1.6.0
 psycopg2-binary==2.9.10
+python-dateutil==2.9.0.post1
 pycparser==3.0
 pycryptodome==3.23.0
 pycryptodomex==3.23.0
