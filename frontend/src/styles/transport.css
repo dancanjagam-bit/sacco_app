@@ -1,0 +1,72 @@
+.transport-page { width: 100%; max-width: 1180px; min-width: 0; margin-inline: auto; }
+.transport-operations-page { width: 100%; max-width: 1180px; min-width: 0; margin-inline: auto; display: grid; gap: 16px; }
+.transport-management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.transport-management-panel { min-width: 0; overflow: hidden; }
+.transport-management-history { grid-column: 1 / -1; overflow: hidden; }
+.transport-management-panel .ui-panel-header > svg { color: var(--brand-indigo); flex: 0 0 auto; }
+.transport-history-list { display: grid; }
+.transport-history-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--border-light); }
+.transport-history-row:last-child { border-bottom: 0; }
+.transport-history-row > div { display: grid; gap: 4px; min-width: 0; }
+.transport-history-row > .transport-assignment-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.transport-end-assignment { flex: 1 0 100%; }
+.transport-end-assignment > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
+.transport-history-row strong { color: var(--navy-900); }
+.transport-history-row span, .transport-history-row small { color: var(--navy-600); line-height: 1.45; overflow-wrap: anywhere; }
+.transport-management-grid .ui-feedback { grid-column: 1 / -1; }
+.transport-page > .ui-feedback { margin: 0 0 16px; }
+.transport-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.transport-form { display: grid; gap: 15px; }
+.transport-form .ui-button { justify-self: start; min-width: 150px; }
+.transport-assignment-panel { grid-column: 1 / -1; }
+.transport-form-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.transport-form-wide-action { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.transport-form-wide-action p { margin: 0; font-size: 12px; }
+.transport-section { margin-top: 18px; overflow: hidden; }
+.transport-section .ui-panel-header .ui-muted { margin: 4px 0 0; font-size: 12px; }
+.transport-issue-list { display: grid; gap: 12px; padding: 16px; }
+.transport-issue { min-width: 0; padding: 15px; background: #fbfaf7; border: 1px solid var(--border-light); border-radius: 10px; }
+.transport-issue-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.transport-issue p { overflow-wrap: anywhere; }
+.transport-resolve-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+
+.transport-crew-page { width: 100%; max-width: 980px; min-width: 0; margin-inline: auto; }
+.transport-crew-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.transport-crew-primary { grid-column: 1 / -1; }
+.transport-crew-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.transport-crew-stat { min-width: 0; padding: 14px; background: #fbfaf7; border: 1px solid var(--border-light); border-radius: 9px; }
+.transport-crew-stat span { display: block; color: var(--navy-600); font-size: 12px; }
+.transport-crew-stat strong { display: block; margin-top: 5px; color: var(--navy-950); font-size: clamp(17px, 3vw, 22px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.transport-crew-form { display: grid; gap: 14px; }
+.transport-crew-form .ui-input, .transport-crew-form .ui-textarea { min-height: 48px; font-size: 16px; }
+.transport-crew-form .ui-textarea { min-height: 94px; }
+.transport-crew-form .ui-button { min-height: 48px; width: 100%; }
+.transport-activity-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.transport-activity-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--border-light); }
+.transport-activity-list li:last-child { border-bottom: 0; }
+.transport-activity-copy { min-width: 0; }
+.transport-activity-copy strong { display: block; color: var(--navy-900); font-variant-numeric: tabular-nums; }
+.transport-activity-copy span { display: block; margin-top: 3px; color: var(--navy-500); font-size: 12px; overflow-wrap: anywhere; }
+.transport-remittance { padding: 14px 0; border-top: 1px solid var(--border-light); }
+.transport-remittance:first-child { border-top: 0; }
+.transport-remittance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.transport-remittance-actions .ui-button { flex: 1 1 170px; }
+.transport-payment-list { margin: 10px 0 0; padding-left: 20px; color: var(--navy-600); font-size: 13px; }
+.transport-no-assignment { display: grid; gap: 15px; }
+
+@media (max-width: 760px) {
+  .transport-admin-grid, .transport-crew-grid, .transport-management-grid { grid-template-columns: minmax(0, 1fr); }
+  .transport-management-history { grid-column: auto; }
+  .transport-assignment-panel, .transport-crew-primary { grid-column: auto; }
+  .transport-form-wide { grid-template-columns: minmax(0, 1fr); }
+  .transport-form-wide-action { grid-column: auto; align-items: stretch; flex-direction: column; }
+  .transport-form-wide-action .ui-button { width: 100%; }
+}
+@media (max-width: 520px) {
+  .transport-crew-metrics { grid-template-columns: minmax(0, 1fr); }
+  .transport-crew-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .transport-crew-stat strong { margin: 0; text-align: right; }
+  .transport-resolve-form { grid-template-columns: minmax(0, 1fr); }
+  .transport-resolve-form .ui-button { width: 100%; }
+  .transport-activity-list li { flex-direction: column; gap: 8px; }
+}

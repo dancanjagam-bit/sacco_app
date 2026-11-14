@@ -1,14 +1,20 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import Icon from "./ui/Icon";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/gif", "application/pdf"];
 
-function IDDocumentUpload({ onChange, disabled = false }) {
+function IDDocumentUpload({ onChange, disabled = false, error: externalError = "", selectedFile = null }) {
   const [preview, setPreview] = useState(null);
   const [isPdf, setIsPdf] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef(null);
   const errorId = "id-doc-error";
+  const displayError = error || externalError;
+
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
 
   function handleChange(e) {
     const file = e.target.files[0];
@@ -48,22 +54,26 @@ function IDDocumentUpload({ onChange, disabled = false }) {
         onChange={handleChange}
         disabled={disabled}
         className="form-control"
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={displayError ? errorId : undefined}
+        aria-invalid={displayError ? "true" : undefined}
       />
-      {error && (
-        <div id={errorId} className="text-danger small mt-1" role="alert">{error}</div>
+      {displayError && (
+        <div id={errorId} className="text-danger small mt-1" role="alert">{displayError}</div>
       )}
-      {isPdf && !error && (
+      {isPdf && !displayError && (
         <div className="mt-2 d-flex align-items-center gap-2">
-          <span style={{ fontSize: "2rem" }}>📄</span>
+          <Icon name="file" size={28} />
           <span className="text-muted small">PDF selected</span>
         </div>
       )}
-      {preview && !isPdf && !error && (
+      {preview && !isPdf && !displayError && (
         <div className="mt-2">
           <img src={preview} alt="ID document preview"
             style={{ maxWidth: "100%", maxHeight: "180px", borderRadius: "6px", border: "1px solid #dee2e6" }} />
         </div>
+      )}
+      {(selectedFile || inputRef.current?.files?.[0]) && (
+        <p className="ui-muted" role="status">{(selectedFile || inputRef.current.files[0]).name} is selected and will be submitted.</p>
       )}
     </div>
   );

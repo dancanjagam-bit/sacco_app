@@ -2,10 +2,15 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
+import uuid
 
 # Transport records are separated from this financial ledger module only for
 # maintainability; importing them here makes Django discover their migrations.
-from .transport_models import TransportRole, TransportRoleGrant, TransportRoute, Vehicle, VehicleOwnership, CrewAssignment, TransportShift, TransportCollection, TransportRemittance, TransportPayment, TransportAllocationRule, TransportPaymentAllocation
+from .transport_models import (TransportRole, TransportRoleGrant, TransportRoute, Vehicle,
+    VehicleOwnership, CrewAssignment, TransportShift, TransportCollection, TransportRemittance,
+    TransportPayment, TransportAllocationRule, TransportPaymentAllocation,
+    TransportAssignmentIssue, TransportDeductionRule, TransportExpense,
+    TransportShiftClosure, TransportPaymentReviewEvent)
 
 User = settings.AUTH_USER_MODEL
 
@@ -120,22 +125,122 @@ class LoanAssessment(models.Model):
 # 💳 Transactions (Ledger)
 # ─────────────────────────────────────────────────────────────────────────────
 class Transaction(models.Model):
+    ACCOUNT_TYPE_CHOICES = [
+        ("bosa", "BOSA savings"),
+        ("fosa", "FOSA savings"),
+        ("loan", "Loan account"),
+        ("other", "Other account activity"),
+    ]
     TYPE_CHOICES = [
         ("deposit",   "Deposit"),
         ("repayment", "Repayment"),
         ("loan",      "Loan Disbursement"),
         ("withdrawal","Withdrawal"),
         ("dividend",  "Dividend Payout"),
+        ("adjustment", "Audited Adjustment"),
     ]
 
     user       = models.ForeignKey(User, on_delete=models.CASCADE)
     type       = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    # Blank is retained for legacy entries whose account cannot be attributed
+    # safely from an authoritative payment/account link.
+    account_type = models.CharField(max_length=16, choices=ACCOUNT_TYPE_CHOICES, blank=True, default="")
     amount     = models.DecimalField(max_digits=12, decimal_places=2)
     note       = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    reverses   = models.OneToOneField(
+        "self", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="reversal_entry",
+    )
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=("user", "account_type", "created_at"), name="txn_user_account_date_idx")]
+
+
+class FosaWithdrawal(models.Model):
+    """A payout request and reservation; this is not itself a ledger debit."""
+    DESTINATION_CHOICES = [("mpesa", "M-Pesa")]
+    STATUS_CHOICES = [
+        ("requested", "Requested"),
+        ("pending", "Pending provider confirmation"),
+        ("uncertain", "Needs provider investigation"),
+        ("succeeded", "Paid"),
+        ("failed", "Definitively failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    client_request_id = models.UUIDField()
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="fosa_withdrawals")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    destination_type = models.CharField(max_length=16, choices=DESTINATION_CHOICES)
+    destination_phone = models.CharField(max_length=16)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="requested")
+    provider_reference = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    provider_transaction_id = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    failure_reason_code = models.CharField(max_length=40, blank=True, default="")
+    ledger_transaction = models.OneToOneField(
+        Transaction, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="fosa_withdrawal",
+    )
+    savings_entry = models.OneToOneField(
+        Savings, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="fosa_withdrawal",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "client_request_id"),
+                name="uniq_fosa_withdrawal_user_request",
+            ),
+        ]
+
+
+class WithdrawalCorrectionProposal(models.Model):
+    """A staff-reviewed reversal proposal for a verified failed legacy payout."""
+    STATUS_CHOICES = [
+        ("proposed", "Awaiting approval"),
+        ("approved", "Approved and posted"),
+        ("rejected", "Rejected"),
+    ]
+    original_transaction = models.ForeignKey(
+        Transaction, on_delete=models.PROTECT, related_name="withdrawal_corrections",
+    )
+    original_savings = models.ForeignKey(
+        Savings, on_delete=models.PROTECT, related_name="withdrawal_corrections",
+    )
+    reason = models.TextField()
+    evidence_reference = models.CharField(max_length=120)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="proposed")
+    proposed_by = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name="proposed_withdrawal_corrections",
+    )
+    decided_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="decided_withdrawal_corrections",
+    )
+    correction_transaction = models.OneToOneField(
+        Transaction, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="withdrawal_correction",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("original_transaction",),
+                condition=models.Q(status__in=("proposed", "approved")),
+                name="uniq_active_withdrawal_correction",
+            ),
+        ]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,54 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import User, OTPRequest, StaffProfile, Notification, AuditLog
+from django import forms
+from .welfare_models import WelfarePolicy
+from .welfare_views import welfare_policy_terms
+
+
+class WelfarePolicyForm(forms.ModelForm):
+    def clean_benefits(self):
+        benefits = self.cleaned_data["benefits"]
+        try:
+            welfare_policy_terms(benefits)
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return benefits
+
+
+@admin.register(WelfarePolicy)
+class WelfarePolicyAdmin(admin.ModelAdmin):
+    form = WelfarePolicyForm
+    readonly_fields = ("approved_at", "approved_by")
+    list_display = ("version", "approval_reference", "active", "approved_at")
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        return (*fields, "version", "approval_reference", "benefits") if obj else fields
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.approved_by = request.user
+        super().save_model(request, obj, form, change)
+        AuditLog.log(request.user, "other", f"Welfare policy {obj.version}", {
+            "operation": "welfare_policy_saved", "active": obj.active,
+            "approval_reference": obj.approval_reference,
+        }, request)
 
 
 @admin.register(User)
@@ -22,14 +70,10 @@ class StaffProfileAdmin(admin.ModelAdmin):
 
 @admin.register(OTPRequest)
 class OTPRequestAdmin(admin.ModelAdmin):
-    list_display  = ("user", "method", "used", "created_at")
+    list_display  = ("user", "code", "method", "used", "created_at")
     list_filter   = ("method", "used")
     search_fields = ("user__username",)
-    readonly_fields = ("created_at",)
-    exclude = ("code",)
-
-    def has_add_permission(self, request):
-        return False
+    readonly_fields = ("code", "created_at")
 
 
 @admin.register(Notification)

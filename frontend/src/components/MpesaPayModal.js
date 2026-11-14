@@ -93,7 +93,7 @@ export default function MpesaPayModal({
   const titleMap = {
     registration: "Pay Registration Fee",
     deposit:      `Deposit to ${(accountType || "").toUpperCase()}`,
-    repayment:    "Repay Loan via M-Pesa",
+    repayment:    "Repay a loan",
   };
 
   const descMap = {
@@ -160,7 +160,7 @@ export default function MpesaPayModal({
   // ── Render: Form ──────────────────────────────────────────────────────────
   if (stage === "form") {
     return (
-      <div style={overlay} role="dialog" aria-modal="true" aria-label="M-Pesa payment">
+      <div style={overlay} role="dialog" aria-modal="true" aria-label={titleMap[paymentType]}>
         <div style={card}>
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -190,7 +190,7 @@ export default function MpesaPayModal({
             <div>
               <div style={{ fontWeight: "700", fontSize: "15px" }}>Lipa Na M-Pesa</div>
               <div style={{ fontSize: "12px", opacity: 0.85 }}>
-                An STK push will be sent to your phone. Enter your M-Pesa PIN to complete.
+                A payment request will be sent to your phone. The deposit is recorded only after provider confirmation.
               </div>
             </div>
           </div>
@@ -224,7 +224,7 @@ export default function MpesaPayModal({
             onClick={handleSubmit}
             disabled={sending}
           >
-            {sending ? "Sending…" : "Send STK Push"}
+            {sending ? "Sending…" : "Send M-Pesa request"}
           </button>
           <button style={btnSecondary} onClick={onClose}>Cancel</button>
         </div>
@@ -242,8 +242,8 @@ export default function MpesaPayModal({
             Check Your Phone
           </h2>
           <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 24px" }}>
-            An M-Pesa prompt has been sent to <strong>{phone}</strong>.
-            <br />Enter your PIN to complete the payment.
+            The request was accepted for processing for <strong>{phone}</strong>.
+            <br />Follow the prompt if it arrives. Acceptance does not confirm payment.
           </p>
 
           {/* Animated spinner */}
@@ -253,9 +253,10 @@ export default function MpesaPayModal({
             animation: "spin 0.9s linear infinite", margin: "0 auto 20px",
           }} />
 
-          <p style={{ fontSize: "12px", color: "#94a3b8" }}>
-            Waiting for confirmation… checking every 3 seconds
-          </p>
+            <p style={{ fontSize: "14px", color: "#475569", fontWeight: 650 }}>
+              Waiting for provider confirmation
+            </p>
+            <p style={{ fontSize: "12px", color: "#64748b" }}>The request is not a completed payment. We check for provider status updates.</p>
 
           <button
             style={{ ...btnSecondary, marginTop: "20px" }}

@@ -1,0 +1,18 @@
+.member-kyc-page { display: grid; gap: 16px; min-width: 0; max-width: 960px; margin-inline: auto; }
+.member-kyc-page .ui-page-heading { margin-bottom: 0; }
+.member-kyc-status,
+.member-kyc-panel {
+  min-width: 0; padding: var(--card-padding); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow-xs);
+}
+.member-kyc-status { border-left: 4px solid var(--brand); }
+.member-kyc-status h2, .member-kyc-panel h2 { margin: 0 0 8px; color: var(--text); font-size: 1.125rem; }
+.member-kyc-status p, .member-kyc-panel p { margin: 6px 0 12px; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.member-kyc-panel form { display: grid; gap: 6px; }
+.member-kyc-panel form > label { color: var(--text); font-weight: 600; }
+.member-kyc-consent { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 10px; }
+.member-kyc-consent input { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 2px; }
+.member-kyc-consent span { color: var(--text-muted); font-size: var(--text-sm); line-height: 1.5; }
+.member-kyc-suggestions { padding: 12px; color: var(--text-muted); background: var(--surface-muted); border-radius: var(--radius-sm); }
+.member-kyc-suggestions strong { color: var(--text); }
+.member-kyc-suggestions p { margin: 5px 0; }

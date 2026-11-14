@@ -1,0 +1,35 @@
+.transport-owner-page { display: grid; gap: 16px; width: 100%; max-width: 1120px; min-width: 0; margin-inline: auto; }
+.transport-owner-back { margin: 0; }
+.transport-owner-back a { color: var(--brand-indigo); font-weight: 650; }
+.transport-owner-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.transport-owner-vehicle { min-width: 0; overflow: hidden; }
+.transport-owner-vehicle-heading { justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.transport-owner-title { display: flex; gap: 12px; min-width: 0; }
+.transport-owner-title > div { min-width: 0; }
+.transport-owner-title h2 { margin: 0 0 4px; overflow-wrap: anywhere; }
+.transport-owner-title span:not(.transport-owner-icon) { color: var(--text-muted); overflow-wrap: anywhere; }
+.transport-owner-icon { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; color: var(--brand-indigo); background: var(--surface-muted); border-radius: var(--radius-control); }
+.transport-owner-assignment { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px; margin-bottom: 16px; }
+.transport-owner-assignment > div, .transport-owner-metric { display: grid; gap: 5px; min-width: 0; padding: 12px; background: var(--surface-muted); border: 1px solid var(--border-light); border-radius: var(--radius-sm); }
+.transport-owner-assignment span, .transport-owner-metric span, .transport-owner-history-row dt, .transport-owner-receipt dt { color: var(--text-muted); font-size: 14px; }
+.transport-owner-assignment strong, .transport-owner-metric strong, .transport-owner-history-row dd, .transport-owner-receipt dd { color: var(--text); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.transport-owner-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; margin: 14px 0; }
+.transport-owner-note { color: var(--text-muted); line-height: 1.5; }
+.transport-owner-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.transport-owner-section h3 { margin: 0 0 12px; }
+.transport-owner-history { display: grid; gap: 10px; }
+.transport-owner-history-row, .transport-owner-remittance { min-width: 0; padding: 14px; border: 1px solid var(--border-light); border-radius: var(--radius-control); }
+.transport-owner-history-heading, .transport-owner-remittance > div { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.transport-owner-history-row p, .transport-owner-remittance p { color: var(--text-muted); overflow-wrap: anywhere; }
+.transport-owner-history-row dl, .transport-owner-receipt dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 10px; }
+.transport-owner-history-row dl > div, .transport-owner-receipt dl > div { min-width: 0; }
+.transport-owner-history-row dd, .transport-owner-receipt dd { margin: 4px 0; font-weight: 650; }
+.transport-owner-remittance { display: grid; gap: 8px; margin: 8px 0; }
+.transport-owner-remittance > div { justify-content: flex-start; align-items: center; gap: 12px; }
+.transport-owner-receipt ul { padding-left: 22px; overflow-wrap: anywhere; }
+.transport-owner-receipt li { margin: 8px 0; }
+@media (max-width: 520px) {
+  .transport-owner-vehicle-heading .ui-status { margin-left: 56px; }
+  .transport-owner-vehicle .ui-panel-body > .ui-button { width: 100%; }
+  .transport-owner-remittance .ui-button { width: 100%; }
+}

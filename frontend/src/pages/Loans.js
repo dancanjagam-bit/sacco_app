@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { Link, useLocation } from "react-router-dom";
 
 import Layout from "../components/Layout";
 import { useAuth } from "../context/AuthContext";
 import LoanTable from "../components/LoanTable";
 import api from "../api/axios";
+import { ROUTES } from "../navigation/routes";
 
 import "../styles/dashboard.css";
 
@@ -17,8 +19,6 @@ const PURPOSES = [
   ["personal",  "👤 Personal Use"],
   ["other",     "📋 Other"],
 ];
-
-const PERIOD_OPTIONS = [3, 6, 12, 18, 24, 36];
 
 function EligibilityBadge({ tier }) {
   if (!tier) return null;
@@ -123,12 +123,14 @@ function GuarantorRequests() {
 }
 
 function Loans() {  const { user, refreshUser } = useAuth();
+  const { state } = useLocation();
+  const prefill = state?.prefill;
 
   const [eligibility, setEligibility] = useState(null);
   const [loadingElig, setLoadingElig] = useState(true);
 
-  const [amount,         setAmount]         = useState("");
-  const [repaymentMonths,setRepaymentMonths] = useState(12);
+  const [amount,         setAmount]         = useState(prefill?.amount ?? "");
+  const [repaymentMonths,setRepaymentMonths] = useState(prefill?.months ?? 12);
   const [purpose,        setPurpose]        = useState("personal");
   const [purposeDetails, setPurposeDetails] = useState("");
   const [submitting,     setSubmitting]     = useState(false);
@@ -150,15 +152,7 @@ function Loans() {  const { user, refreshUser } = useAuth();
 
   useEffect(() => { fetchEligibility(); }, [fetchEligibility]);
 
-  // Derived interest rate for the currently selected period
-  const currentRate = eligibility?.interest_rates?.[String(repaymentMonths)]?.[eligibility?.interest_band] || null;
-
-  // Monthly instalment preview
-  const amtNum = parseFloat(amount) || 0;
-  const totalPayable = currentRate
-    ? amtNum * (1 + currentRate / 100)
-    : amtNum;
-  const monthly = repaymentMonths > 0 ? totalPayable / repaymentMonths : 0;
+  const periods = Object.keys(eligibility?.interest_rates || {}).map(Number);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -173,7 +167,8 @@ function Loans() {  const { user, refreshUser } = useAuth();
     setSubmitting(true);
     try {
       const res = await api.post("loan/apply/", {
-        amount: value,
+        product: prefill?.product,
+        amount,
         repayment_months: repaymentMonths,
         purpose,
         purpose_details: purposeDetails,
@@ -201,6 +196,7 @@ function Loans() {  const { user, refreshUser } = useAuth();
         <>
           <h2 className="section-title">Loans</h2>
           <p className="section-subtitle">Apply for a loan based on your savings history</p>
+          <Link className="ui-button ui-button-secondary" to={ROUTES.loanCalculator}>Loan calculator</Link>
 
           {/* ── Eligibility panel ── */}
           {loadingElig ? (
@@ -265,6 +261,7 @@ function Loans() {  const { user, refreshUser } = useAuth();
               boxShadow: "var(--shadow)", marginBottom: "24px",
             }}>
               <h3 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: "700" }}>Apply for a Loan</h3>
+              {prefill?.product === "savings_tier" && <p>Loan product: Savings-tier loan</p>}
 
               {formMsg && (
                 <div className={`alert alert-${formMsg.type}`} style={{ marginBottom: "16px" }}>
@@ -275,11 +272,13 @@ function Loans() {  const { user, refreshUser } = useAuth();
               <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "600px" }}>
                 {/* Amount */}
                 <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
+                  <label htmlFor="loan-application-amount" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
                     Loan Amount (KES) — max KES {Number(eligibility.max_loan).toLocaleString()}
                   </label>
                   <input
+                    id="loan-application-amount"
                     type="number"
+                    step="0.01"
                     className="amount-input"
                     style={{ width: "100%" }}
                     placeholder="Enter amount"
@@ -293,16 +292,17 @@ function Loans() {  const { user, refreshUser } = useAuth();
 
                 {/* Repayment period */}
                 <div>
-                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
+                  <label htmlFor="loan-application-period" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>
                     Repayment Period
                   </label>
                   <select
+                    id="loan-application-period"
                     className="amount-input"
                     style={{ width: "100%" }}
                     value={repaymentMonths}
                     onChange={(e) => setRepaymentMonths(Number(e.target.value))}
                   >
-                    {PERIOD_OPTIONS.map((m) => {
+                    {periods.map((m) => {
                       const rate = eligibility.interest_rates?.[String(m)]?.[eligibility.interest_band];
                       return (
                         <option key={m} value={m}>
@@ -312,30 +312,6 @@ function Loans() {  const { user, refreshUser } = useAuth();
                     })}
                   </select>
                 </div>
-
-                {/* Live instalment preview */}
-                {amtNum > 0 && currentRate && (
-                  <div style={{
-                    background: "#eff6ff", border: "1px solid #bfdbfe",
-                    borderRadius: "8px", padding: "14px 16px", fontSize: "13px",
-                  }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-                      {[
-                        ["Principal",      `KES ${amtNum.toLocaleString()}`],
-                        ["Interest",       `${currentRate}%  =  KES ${(amtNum * currentRate / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`],
-                        ["Total Payable",  `KES ${totalPayable.toLocaleString(undefined, { maximumFractionDigits: 0 })}`],
-                        ["Monthly Payment",`KES ${monthly.toLocaleString(undefined, { maximumFractionDigits: 0 })}`],
-                        ["Repayment",      `${repaymentMonths} months`],
-                        ["Rate Tier",      eligibility.tier_label],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <div style={{ color: "#6b7280", fontSize: "11px", fontWeight: "600", textTransform: "uppercase" }}>{k}</div>
-                          <div style={{ fontWeight: "700", color: "#1e293b", marginTop: "2px" }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* Purpose */}
                 <div>
@@ -401,7 +377,7 @@ function Loans() {  const { user, refreshUser } = useAuth();
                   </tr>
                 </thead>
                 <tbody>
-                  {PERIOD_OPTIONS.map((m) => {
+                  {periods.map((m) => {
                     const rates = eligibility.interest_rates?.[String(m)];
                     if (!rates) return null;
                     return (

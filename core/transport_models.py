@@ -82,12 +82,21 @@ class CrewAssignment(models.Model):
             models.CheckConstraint(condition=Q(ends_at__isnull=True) | Q(ends_at__gt=models.F("starts_at")), name="transport_assignment_valid_period"),
         ]
     def save(self, *args, **kwargs):
-        self.vehicle_label = self.vehicle.registration
-        self.route_label = self.route.name
-        self.driver_label = self.driver.get_full_name() or self.driver.username
-        self.conductor_label = (self.conductor.get_full_name() or self.conductor.username) if self.conductor else ""
-        super().save(*args, **kwargs)
-        TransportShift.objects.get_or_create(assignment=self, defaults={"starts_at":self.starts_at,"ends_at":self.ends_at,"status":"active" if self.status == "active" else "scheduled"})
+        # These values describe the assignment at creation time. Do not refresh
+        # them when a current vehicle, route, or user profile is later renamed.
+        is_new = self._state.adding
+        if is_new:
+            self.vehicle_label = self.vehicle.registration
+            self.route_label = self.route.name
+            self.driver_label = self.driver.get_full_name() or self.driver.username
+            self.conductor_label = (self.conductor.get_full_name() or self.conductor.username) if self.conductor else ""
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if is_new:
+                shift_status = {"active": "active", "ended": "closed"}.get(self.status, "scheduled")
+                TransportShift.objects.create(
+                    assignment=self, starts_at=self.starts_at, ends_at=self.ends_at, status=shift_status,
+                )
 
 
 class TransportShift(models.Model):
@@ -95,6 +104,88 @@ class TransportShift(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=12, choices=[("scheduled", "Scheduled"), ("active", "Active"), ("closed", "Closed")], default="scheduled")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TransportDeductionRule(models.Model):
+    """Approved, versioned expense deduction policy for shift closure.
+
+    No rule is created or activated by default. A rule is usable only after a
+    superuser records the cooperative's approval reference and approver.
+    """
+    scope = models.CharField(max_length=30, default="shift_deduction", editable=False)
+    version = models.CharField(max_length=60, unique=True)
+    deductible_categories = models.JSONField(default=list, blank=True)
+    approval_reference = models.CharField(max_length=120, blank=True, default="")
+    active = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="approved_transport_deduction_rules")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("scope",), condition=Q(active=True), name="unique_active_transport_deduction_rule"),
+            models.CheckConstraint(condition=Q(active=False) | (Q(approved_by__isnull=False) & ~Q(approval_reference="") & Q(approved_at__isnull=False)), name="active_transport_rule_is_approved"),
+        ]
+
+
+class TransportExpense(models.Model):
+    STATUS_CHOICES = [("reported", "Reported"), ("approved", "Approved"), ("rejected", "Rejected")]
+    assignment = models.ForeignKey(CrewAssignment, on_delete=models.PROTECT, related_name="expenses")
+    shift = models.ForeignKey(TransportShift, on_delete=models.PROTECT, related_name="expenses")
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.PROTECT, related_name="transport_expenses")
+    route = models.ForeignKey(TransportRoute, on_delete=models.PROTECT, related_name="transport_expenses")
+    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="reported_transport_expenses")
+    client_key = models.UUIDField()
+    category = models.CharField(max_length=60)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    notes = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="reported")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_transport_expenses")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=("reported_by", "client_key"), name="unique_transport_expense_submission"),
+            models.CheckConstraint(condition=Q(amount__gt=0), name="transport_expense_amount_positive"),
+        ]
+
+
+class TransportShiftClosure(models.Model):
+    CALCULATION_CHOICES = [("calculated", "Calculated"), ("rule_required", "Rule required"), ("review_required", "Review required")]
+    shift = models.OneToOneField(TransportShift, on_delete=models.PROTECT, related_name="closure")
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="closed_transport_shifts")
+    closed_at = models.DateTimeField(default=timezone.now)
+    reported_gross = models.DecimalField(max_digits=12, decimal_places=2)
+    approved_expenses = models.DecimalField(max_digits=12, decimal_places=2)
+    deductible_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    expected_remittance = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    deduction_rule_version = models.CharField(max_length=60, blank=True)
+    calculation_status = models.CharField(max_length=16, choices=CALCULATION_CHOICES, default="rule_required")
+    calculation_note = models.CharField(max_length=240, blank=True)
+
+
+
+class TransportPaymentReviewEvent(models.Model):
+    """Safe metadata for duplicate/conflicting provider callbacks; no raw PII."""
+    STATUS_CHOICES = [("pending", "Pending review"), ("resolved", "Resolved")]
+    event_key = models.CharField(max_length=64, unique=True)
+    payment = models.ForeignKey(
+        "core.TransportPayment",
+        null=True, blank=True, on_delete=models.PROTECT, related_name="review_events",
+    )
+    receipt = models.CharField(max_length=20, blank=True)
+    provider_reference = models.CharField(max_length=120, blank=True)
+    observed_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    reason = models.CharField(max_length=240)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="pending")
+    resolution_reason = models.CharField(max_length=500, blank=True)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="resolved_transport_payment_events")
+    resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -110,7 +201,10 @@ class TransportCollection(models.Model):
     recorded_at = models.DateTimeField(default=timezone.now)
     class Meta:
         ordering = ["-recorded_at"]
-        constraints = [models.UniqueConstraint(fields=("recorded_by", "client_key"), name="unique_transport_collection_submission")]
+        constraints = [
+            models.UniqueConstraint(fields=("recorded_by", "client_key"), name="unique_transport_collection_submission"),
+            models.CheckConstraint(condition=Q(amount__gt=0), name="transport_collection_amount_positive"),
+        ]
 
     def save(self, *args, **kwargs):
         if self.assignment_id:
@@ -135,6 +229,7 @@ class TransportRemittance(models.Model):
     shift=models.ForeignKey(TransportShift,on_delete=models.PROTECT,related_name="remittances")
     vehicle=models.ForeignKey(Vehicle,on_delete=models.PROTECT,related_name="remittances")
     route=models.ForeignKey(TransportRoute,on_delete=models.PROTECT,related_name="remittances")
+    closure=models.OneToOneField(TransportShiftClosure,null=True,blank=True,on_delete=models.PROTECT,related_name="remittance")
     amount=models.DecimalField(max_digits=12,decimal_places=2)
     idempotency_key=models.UUIDField()
     status=models.CharField(max_length=16,choices=STATUS_CHOICES,default="pending")
@@ -155,9 +250,12 @@ class TransportPayment(models.Model):
     method=models.CharField(max_length=8,choices=METHOD_CHOICES)
     status=models.CharField(max_length=16,choices=STATUS_CHOICES,default="pending")
     amount=models.DecimalField(max_digits=12,decimal_places=2)
+    # The amount requested/reported is distinct from provider- or clerk-confirmed funds.
+    received_amount=models.DecimalField(max_digits=12,decimal_places=2,null=True,blank=True)
     payer_phone=models.CharField(max_length=15,blank=True)
     mpesa_transaction=models.OneToOneField("core.MpesaTransaction",null=True,blank=True,on_delete=models.PROTECT,related_name="transport_payment")
     provider_reference=models.CharField(max_length=120,blank=True)
+    requires_signed_callback=models.BooleanField(default=False)
     mpesa_receipt=models.CharField(max_length=20,null=True,blank=True,unique=True)
     unallocated_amount=models.DecimalField(max_digits=12,decimal_places=2,default=0)
     confirmed_by=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,blank=True,on_delete=models.SET_NULL,related_name="confirmed_transport_payments")
@@ -197,3 +295,19 @@ class TransportRoleGrant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=("user", "role"), name="unique_transport_role_grant")]
+
+
+class TransportAssignmentIssue(models.Model):
+    """Crew reports a missing or incorrect assignment for operations review."""
+    STATUS_CHOICES = [("pending", "Pending"), ("resolved", "Resolved")]
+    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="transport_assignment_issues")
+    assignment = models.ForeignKey(CrewAssignment, null=True, blank=True, on_delete=models.PROTECT, related_name="issues")
+    message = models.CharField(max_length=500)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="pending")
+    resolution_reason = models.CharField(max_length=500, blank=True)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="resolved_transport_assignment_issues")
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

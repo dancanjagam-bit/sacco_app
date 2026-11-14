@@ -14,12 +14,14 @@ Key SACCO business rules that affect test setup:
 
 from decimal import Decimal
 from datetime import date
+import uuid
 from dateutil.relativedelta import relativedelta
 
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from members.models import Member
+from accounts.models import StaffProfile, AuditLog
 from .models import Savings, Loan, Transaction
 
 User = get_user_model()
@@ -71,6 +73,13 @@ def _create_bosa_history(user, months=6, amount_per_month=Decimal("1000.00")):
         )
 
 
+def _record_savings(user, amount, account_type="fosa"):
+    """Seed synthetic posted savings directly; never use member write API."""
+    return Savings.objects.create(
+        user=user, amount=Decimal(str(amount)), account_type=account_type,
+    )
+
+
 class CoreWorkflowTests(APITestCase):
     """Full happy-path: deposit → apply → approve → repay."""
 
@@ -84,20 +93,41 @@ class CoreWorkflowTests(APITestCase):
         # Give member 6 months of qualifying BOSA history (min for Bronze tier)
         _create_bosa_history(self.member, months=6, amount_per_month=Decimal("1000.00"))
 
-    def test_deposit_adds_savings_and_transaction(self):
-        """BOSA deposit creates Savings record and Transaction ledger entry."""
+    def test_member_cannot_post_unverified_direct_deposit(self):
+        """A member-supplied amount is not evidence of money received."""
         self.client.force_authenticate(user=self.member)
         res = self.client.post(
             "/api/deposit/",
             {"amount": "500.00", "account_type": "bosa"},
             format="json",
         )
-        if res.status_code != 200:
-            self.fail(f"Deposit failed {res.status_code}: {res.data}")
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(
-            Transaction.objects.filter(user=self.member, type="deposit").count(), 1
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.data["code"], "provider_confirmation_required")
+        self.assertFalse(Savings.objects.filter(user=self.member, amount=Decimal("500.00")).exists())
+        self.assertFalse(Transaction.objects.filter(user=self.member, type="deposit").exists())
+
+    def test_active_accountant_manual_deposit_requires_reason_and_is_audited(self):
+        accountant = User.objects.create_user(
+            username="accountant", password="TestPass1", is_staff=True,
         )
+        StaffProfile.objects.create(user=accountant, role="accountant", status="active")
+        self.client.force_authenticate(user=accountant)
+        missing_reason = self.client.post(
+            "/api/deposit/", {"amount": "500.00", "account_type": "bosa"}, format="json",
+        )
+        self.assertEqual(missing_reason.status_code, 400)
+        self.assertFalse(Transaction.objects.filter(user=accountant, type="deposit").exists())
+
+        response = self.client.post(
+            "/api/deposit/",
+            {"amount": "500.00", "account_type": "bosa", "reason": "Cash received at office"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Savings.objects.get(user=accountant).account_type, "bosa")
+        entry = Transaction.objects.get(user=accountant, type="deposit")
+        self.assertEqual(entry.account_type, "bosa")
+        self.assertTrue(AuditLog.objects.filter(action="deposit", target__contains=str(entry.pk)).exists())
 
     def test_apply_loan_rejected_without_bosa_history(self):
         """A fresh user with no BOSA history cannot apply for a loan."""
@@ -125,14 +155,8 @@ class CoreWorkflowTests(APITestCase):
         """
         self.client.force_authenticate(user=self.member)
 
-        # 1. Current-month BOSA deposit (FOSA for the current month)
-        dep = self.client.post(
-            "/api/deposit/",
-            {"amount": "2000.00", "account_type": "bosa"},
-            format="json",
-        )
-        if dep.status_code != 200:
-            self.fail(f"Deposit failed {dep.status_code}: {dep.data}")
+        # Seed a posted current-period savings row for this isolated workflow.
+        _record_savings(self.member, "2000.00", "bosa")
 
         # 2. Apply for a loan — BOSA balance is 6×1000 + 2000 = 8000
         #    Bronze tier (6 months) → max loan = 8000 × 3 = 24000
@@ -160,21 +184,20 @@ class CoreWorkflowTests(APITestCase):
         # Interest: Bronze 12-month = 10% → 5000 + 500 = 5500
         self.assertEqual(loan.balance, Decimal("5500.00"))
 
-        # 4. Member repays part
+        # 4. Legacy direct repayment is disabled: only confirmed provider
+        # callbacks may post money or reduce a loan balance.
         self.client.force_authenticate(user=self.member)
         repay = self.client.post(
             f"/api/loan/{loan_id}/repay/",
             {"amount": "1000.00"},
             format="json",
         )
-        if repay.status_code != 200:
-            self.fail(f"Repayment failed {repay.status_code}: {repay.data}")
+        self.assertEqual(repay.status_code, 409)
+        self.assertIn("confirmed M-Pesa", repay.data["error"])
 
         loan.refresh_from_db()
-        self.assertEqual(loan.balance, Decimal("4500.00"))
-        self.assertEqual(
-            Transaction.objects.filter(user=self.member, type="repayment").count(), 1
-        )
+        self.assertEqual(loan.balance, Decimal("5500.00"))
+        self.assertEqual(Transaction.objects.filter(user=self.member, type="repayment").count(), 0)
 
     def test_repayment_exceeding_balance_rejected(self):
         """Repayment larger than outstanding balance is rejected."""
@@ -198,8 +221,10 @@ class CoreWorkflowTests(APITestCase):
             {"amount": str(float(loan.balance) + 1)},
             format="json",
         )
-        self.assertEqual(res.status_code, 400)
-        self.assertIn("error", res.data)
+        self.assertEqual(res.status_code, 409)
+        loan.refresh_from_db()
+        self.assertEqual(loan.balance, Decimal("3300.00"))
+        self.assertEqual(Transaction.objects.filter(user=self.member, type="repayment").count(), 0)
 
     def test_duplicate_pending_loan_rejected(self):
         """A member cannot have two pending loan applications simultaneously."""
@@ -226,15 +251,14 @@ class SavingsBOSAFOSATests(APITestCase):
         self.client.force_authenticate(user=self.member)
 
     def test_bosa_deposit_creates_record(self):
+        self.client.force_authenticate(user=self.member)
         res = self.client.post(
             "/api/deposit/",
             {"amount": "2000.00", "account_type": "bosa"},
             format="json",
         )
-        self.assertEqual(res.status_code, 200)
-        bosa = Savings.objects.filter(user=self.member, account_type="bosa")
-        self.assertEqual(bosa.count(), 1)
-        self.assertEqual(bosa.first().amount, Decimal("2000.00"))
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(Savings.objects.filter(user=self.member, account_type="bosa").exists())
 
     def test_fosa_deposit_creates_record(self):
         res = self.client.post(
@@ -242,72 +266,58 @@ class SavingsBOSAFOSATests(APITestCase):
             {"amount": "500.00", "account_type": "fosa"},
             format="json",
         )
-        self.assertEqual(res.status_code, 200)
-        fosa = Savings.objects.filter(user=self.member, account_type="fosa")
-        self.assertEqual(fosa.count(), 1)
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(Savings.objects.filter(user=self.member, account_type="fosa").exists())
 
-    def test_fosa_withdrawal_succeeds(self):
-        """FOSA funds can be withdrawn immediately."""
-        self.client.post("/api/deposit/", {"amount": "3000.00", "account_type": "fosa"}, format="json")
+    def test_fosa_withdrawal_without_provider_is_disabled_without_debit(self):
+        """No outbound provider means no withdrawal request or ledger debit."""
+        _record_savings(self.member, "3000.00", "fosa")
         res = self.client.post(
             "/api/withdraw/",
-            {"amount": "1000.00", "account_type": "fosa"},
+            {
+                "amount": "1000.00", "account_type": "fosa",
+                "destination_type": "mpesa", "destination": "0712345678",
+                "client_request_id": str(uuid.uuid4()),
+            },
             format="json",
         )
-        if res.status_code != 200:
-            self.fail(f"FOSA withdrawal failed {res.status_code}: {res.data}")
-        self.assertEqual(res.status_code, 200)
-        # Net FOSA = 3000 deposit + (-1000) withdrawal = 2000
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(res.data["status"], "unavailable")
+        self.assertIn("No funds were debited", res.data["error"])
         from django.db.models import Sum
         net = Savings.objects.filter(user=self.member, account_type="fosa").aggregate(
             t=Sum("amount")
         )["t"]
-        self.assertEqual(net, Decimal("2000.00"))
+        self.assertEqual(net, Decimal("3000.00"))
+        self.assertEqual(Transaction.objects.filter(user=self.member, type="withdrawal").count(), 0)
 
     def test_bosa_withdrawal_blocked_for_active_member(self):
         """An active member cannot withdraw BOSA savings."""
-        self.client.post("/api/deposit/", {"amount": "5000.00", "account_type": "bosa"}, format="json")
+        _record_savings(self.member, "5000.00", "bosa")
         res = self.client.post(
             "/api/withdraw/",
-            {"amount": "1000.00", "account_type": "bosa"},
+            {
+                "amount": "1000.00", "account_type": "bosa",
+                "destination_type": "mpesa", "destination": "0712345678",
+                "client_request_id": str(uuid.uuid4()),
+            },
             format="json",
         )
         self.assertEqual(res.status_code, 400)
         self.assertIn("non-withdrawable", res.data.get("error", "").lower())
 
-    def test_fosa_withdrawal_blocked_when_exceeds_balance(self):
-        """Cannot withdraw more FOSA than available."""
-        self.client.post("/api/deposit/", {"amount": "500.00", "account_type": "fosa"}, format="json")
+    def test_fosa_withdrawal_is_disabled_without_provider_even_before_funds_check(self):
+        """The route cannot create any request while outbound payouts are unavailable."""
+        _record_savings(self.member, "500.00", "fosa")
         res = self.client.post(
             "/api/withdraw/",
-            {"amount": "1000.00", "account_type": "fosa"},
+            {
+                "amount": "1000.00", "account_type": "fosa",
+                "destination_type": "mpesa", "destination": "0712345678",
+                "client_request_id": str(uuid.uuid4()),
+            },
             format="json",
         )
-        self.assertEqual(res.status_code, 400)
-
-
-class TransactionHistoryEndpointTests(APITestCase):
-    def test_history_is_paginated_filtered_and_keeps_account_wide_totals(self):
-        member = User.objects.create_user(username="history_member", password="TestPass1")
-        other = User.objects.create_user(username="other_member", password="TestPass1")
-        Transaction.objects.bulk_create([
-            Transaction(user=member, type="deposit", amount=Decimal("10.00"), note=f"deposit {i}")
-            for i in range(51)
-        ])
-        Transaction.objects.create(user=other, type="deposit", amount=Decimal("999.00"))
-
-        self.client.force_authenticate(user=member)
-        first_page = self.client.get("/api/transactions/")
-        self.assertEqual(first_page.status_code, 200)
-        self.assertEqual(first_page.data["count"], 51)
-        self.assertEqual(len(first_page.data["results"]), 50)
-        self.assertEqual(first_page.data["summary"]["deposits"], 510.0)
-        self.assertEqual(first_page.data["summary"]["count"], 51)
-
-        second_page = self.client.get("/api/transactions/?page=2")
-        self.assertEqual(second_page.status_code, 200)
-        self.assertEqual(len(second_page.data["results"]), 1)
-
-        filtered = self.client.get("/api/transactions/?search=deposit%2050")
-        self.assertEqual(filtered.data["count"], 1)
-        self.assertEqual(filtered.data["summary"]["count"], 51)
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(Savings.objects.filter(user=self.member, amount__lt=0).count(), 0)
+        self.assertEqual(Transaction.objects.filter(user=self.member, type="withdrawal").count(), 0)

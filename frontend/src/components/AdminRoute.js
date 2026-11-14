@@ -1,26 +1,33 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { hasPermission, ROUTES } from "../navigation/routes";
+import { availableWorkspaces, portalDestination } from "../auth/portalDestination";
+import LoadingState from "./ui/LoadingState";
+import RouteAccessDenied from "./RouteAccessDenied";
 
-function AdminRoute({ children, superAdminOnly = false }) {
+function AdminRoute({ children, superAdminOnly = false, requiredPermission }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", color: "#64748b" }}>
-        Loading...
-      </div>
-    );
+    return <main className="application-loading"><LoadingState label="Loading your secure workspace…" /></main>;
   }
 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to={ROUTES.login} replace />;
 
-  const isAdmin = user.is_staff || user.is_superuser || user.is_admin;
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
-
-  if (superAdminOnly) {
-    const isSuperAdmin = user.is_superuser || user.staff_role === "superadmin";
-    if (!isSuperAdmin) return <Navigate to="/admin/dashboard" replace />;
+  // Navigation permissions mirror the backend access snapshot. Every API
+  // still performs its own checks; this prevents a permitted link and a
+  // generic frontend guard from disagreeing about module access.
+  const required = requiredPermission || "staff.manage";
+  const canAccess = (Array.isArray(required)
+    ? required.some((permission) => hasPermission(user, permission))
+    : hasPermission(user, required)) && (!superAdminOnly || hasPermission(user, "staff.manage"));
+  if (!canAccess) {
+    const permittedWorkspaces = availableWorkspaces(user);
+    const destination = permittedWorkspaces.length ? portalDestination(user) : null;
+    if (destination && destination !== location.pathname) return <Navigate to={destination} replace />;
+    return <RouteAccessDenied destination={destination} />;
   }
 
   return children;

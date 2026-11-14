@@ -1,6 +1,112 @@
-@import './styles/theme.css';
+/* ── Shared primitive utility classes ──────────────────────────────────────
+   Apply deliberately during component integration.
+   They follow the spec's naming so new components can use them directly
+   while existing components keep their own class names unchanged.
+─────────────────────────────────────────────────────────────────────────── */
+
+/* Root app wrapper */
+.sacco-app {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: var(--leading);
+}
+
+/* Card surface */
+.sacco-card {
+  min-width: 0;
+  padding: var(--card-padding);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* Large numeric value */
+.sacco-value {
+  font-size: var(--text-value);
+  font-weight: var(--weight-heading);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Hero gradient band */
+.sacco-hero {
+  background: var(--hero);
+  color: var(--hero-text);
+}
+
+/* Sticky top bar */
+.sacco-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  min-height: var(--navbar-height);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Primary action button */
+.sacco-button {
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--action);
+  color: var(--on-action);
+  font: inherit;
+  font-weight: var(--weight-label);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+.sacco-button:hover   { background: var(--action-hover); }
+.sacco-button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Focus ring on all interactive elements inside .sacco-app */
+.sacco-app :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* 12-column responsive grid */
+.sacco-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+.sacco-span-4  { grid-column: span 4; }
+.sacco-span-6  { grid-column: span 6; }
+.sacco-span-8  { grid-column: span 8; }
+.sacco-span-12 { grid-column: 1 / -1; }
+
+@media (max-width: 63.99rem) {
+  .sacco-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sacco-span-4,
+  .sacco-span-6  { grid-column: span 1; }
+  .sacco-span-8,
+  .sacco-span-12 { grid-column: 1 / -1; }
+}
+
+@media (max-width: 39.99rem) {
+  .sacco-grid { grid-template-columns: minmax(0, 1fr); }
+  .sacco-span-4,
+  .sacco-span-6,
+  .sacco-span-8,
+  .sacco-span-12 { grid-column: 1; }
+}
+
+/* Screen-reader utility (keep in sync with sidebar.css .sr-only) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }

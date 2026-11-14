@@ -1,81 +1,89 @@
-import React from "react";
+import React, { useEffect, useId, useRef } from "react";
+import Button from "./ui/Button";
 
-/**
- * ConfirmModal — a non-blocking, accessible replacement for window.confirm and window.prompt.
- *
- * Props:
- *   title        string   — heading text
- *   message      string   — body message / warning
- *   confirmLabel string   — confirm button label (default "Confirm")
- *   cancelLabel  string   — cancel button label (default "Cancel")
- *   dangerous    bool     — if true the confirm button renders in red
- *   onConfirm    fn()     — called when user clicks confirm
- *   onCancel     fn()     — called when user clicks cancel or backdrop
- *   children             — optional extra content (e.g. a <textarea> for a reason)
- */
+/** Shared confirmation dialog with Escape handling, focus containment and restore. */
 export default function ConfirmModal({
-  title        = "Confirm Action",
-  message      = "Are you sure?",
+  title = "Confirm action",
+  message = "Are you sure?",
   confirmLabel = "Confirm",
-  cancelLabel  = "Cancel",
-  dangerous    = false,
+  cancelLabel = "Cancel",
+  dangerous = false,
   onConfirm,
   onCancel,
   children,
+  loading = false,
 }) {
+  const dialogRef = useRef(null);
+  const cancelRef = useRef(null);
+  const cancelHandler = useRef(onCancel);
+  const loadingRef = useRef(loading);
+  const titleId = useId();
+  const descriptionId = useId();
+  cancelHandler.current = onCancel;
+  loadingRef.current = loading;
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => {
+      if (cancelRef.current && !cancelRef.current.disabled) cancelRef.current.focus();
+      else dialogRef.current?.focus();
+    });
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!loadingRef.current) cancelHandler.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, []);
+
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,.55)",
-        display: "flex", justifyContent: "center", alignItems: "center",
-        zIndex: 1000, padding: "16px",
-      }}
-      onClick={onCancel}
-    >
-      <div
-        style={{
-          background: "#fff", borderRadius: "14px", padding: "28px 32px",
-          width: "100%", maxWidth: "420px", boxShadow: "0 24px 64px rgba(0,0,0,.2)",
-        }}
-        onClick={e => e.stopPropagation()}
+    <div className="ui-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !loading && onCancel?.()}>
+      <section
+        ref={dialogRef}
+        className="ui-dialog"
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-desc"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
       >
-        <h3 id="confirm-title" style={{ margin: "0 0 10px", fontSize: "17px", fontWeight: "800", color: "#0f172a" }}>
-          {title}
-        </h3>
-        <p id="confirm-desc" style={{ margin: "0 0 16px", fontSize: "14px", color: "#475569", lineHeight: 1.6 }}>
-          {message}
-        </p>
-
-        {children && <div style={{ marginBottom: "16px" }}>{children}</div>}
-
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "9px 20px", borderRadius: "8px", border: "1.5px solid #e2e8f0",
-              background: "#fff", color: "#475569", fontWeight: "600", fontSize: "13px",
-              cursor: "pointer",
-            }}
-          >
+        <h2 className="ui-dialog-title" id={titleId}>{title}</h2>
+        <p className="ui-dialog-copy" id={descriptionId}>{message}</p>
+        {children && <div className="ui-dialog-content">{children}</div>}
+        <div className="ui-dialog-actions">
+          <Button ref={cancelRef} variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}
-          </button>
-          <button
-            onClick={onConfirm}
-            autoFocus
-            style={{
-              padding: "9px 20px", borderRadius: "8px", border: "none",
-              background: dangerous ? "#dc2626" : "var(--primary)",
-              color: "#fff", fontWeight: "700", fontSize: "13px", cursor: "pointer",
-            }}
-          >
+          </Button>
+          <Button variant={dangerous ? "danger" : "primary"} onClick={onConfirm} loading={loading}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

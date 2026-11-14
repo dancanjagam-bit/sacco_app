@@ -1,0 +1,11 @@
+.repay-modal-overlay { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: rgba(11,20,55,.56); }
+.repay-modal { width: min(100%, 520px); max-height: min(90vh, 760px); overflow-y: auto; }
+.repay-modal-header { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; background: #fff; border-bottom: 1px solid var(--border-light); }
+.repay-modal-header h2 { margin: 0; color: var(--navy-950); font-size: 21px; }
+.repay-modal-body { display: grid; gap: 16px; padding: 20px; }
+.repay-loan-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.repay-loan-summary > div { display: grid; gap: 5px; min-width: 0; padding: 12px; border: 1px solid var(--border-light); border-radius: var(--radius); }
+.repay-loan-summary dt { color: var(--navy-600); font-size: 13px; }
+.repay-loan-summary dd { margin: 0; color: var(--navy-950); font-weight: 700; overflow-wrap: anywhere; }
+.repay-modal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 480px) { .repay-modal { max-height: calc(100dvh - 24px); } .repay-modal-body { padding: 16px; } .repay-modal-actions > .ui-button { flex: 1 1 140px; } }

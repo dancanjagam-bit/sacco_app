@@ -1,154 +1,158 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import api from "../api/axios";
-import "../styles/dashboard.css";
+import Button from "../components/ui/Button";
+import FeedbackMessage from "../components/ui/FeedbackMessage";
+import Icon from "../components/ui/Icon";
+import LoadingState from "../components/ui/LoadingState";
+import PageHeading from "../components/ui/PageHeading";
+import "../styles/member-notifications.css";
 
-const TYPE_STYLE = {
-  success: { bg: "#f0fdf4", border: "#86efac", icon: "✅", color: "#15803d" },
-  info:    { bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", color: "#1d4ed8" },
-  warning: { bg: "#fffbeb", border: "#fcd34d", icon: "⚠️", color: "#b45309" },
-  error:   { bg: "#fef2f2", border: "#fca5a5", icon: "❌", color: "#b91c1c" },
+const typeLabel = {
+  success: "Update",
+  info: "Information",
+  warning: "Action needed",
+  error: "Issue",
 };
 
 export default function Notifications() {
-  const navigate = useNavigate();
-  const [notifs,   setNotifs]   = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [unread,   setUnread]   = useState(0);
-  const [error,    setError]    = useState("");
+  const [items, setItems] = useState(null);
+  const [notices, setNotices] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [retryAction, setRetryAction] = useState(null);
+  const [updating, setUpdating] = useState(false);
 
-  useEffect(() => { fetchNotifs(); }, []);
-
-  const fetchNotifs = async () => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
-      const res = await api.get("notifications/");
-      setNotifs(res.data.notifications);
-      setUnread(res.data.unread_count);
+      const response = await api.get("notifications/");
+      const notifications = response?.data?.notifications;
+      if (!Array.isArray(notifications)) {
+        throw new Error("Invalid notifications response");
+      }
+      const count = Number(response.data.unread_count);
+      setItems(notifications);
+      setNotices(Array.isArray(response.data.member_notices) ? response.data.member_notices : []);
+      setUnread(Number.isFinite(count) && count >= 0
+        ? count
+        : notifications.filter((item) => !item.is_read).length);
     } catch {
-      setError("Could not load notifications. Please try again.");
+      setItems(null);
+      setNotices([]);
+      setUnread(0);
+      setLoadError("Could not load notifications. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   const markRead = async (id) => {
+    setUpdating(true);
     setActionError("");
-    setRetryAction(null);
     try {
       await api.post(`notifications/${id}/read/`);
-      setNotifs(notifs.map(n => n.id === id ? { ...n, is_read: true } : n));
-      setUnread(prev => Math.max(0, prev - 1));
+      setItems((current) => current?.map((item) =>
+        item.id === id ? { ...item, is_read: true } : item
+      ) ?? null);
+      setUnread((current) => Math.max(0, current - 1));
     } catch {
-      setActionError("Failed to mark this notification as read. Please try again.");
-      setRetryAction(() => () => markRead(id));
+      setActionError("We could not update this notification. Please retry.");
+    } finally {
+      setUpdating(false);
     }
   };
 
   const markAllRead = async () => {
+    setUpdating(true);
     setActionError("");
-    setRetryAction(null);
     try {
       await api.post("notifications/read-all/");
-      setNotifs(notifs.map(n => ({ ...n, is_read: true })));
+      setItems((current) => current?.map((item) => ({ ...item, is_read: true })) ?? null);
       setUnread(0);
     } catch {
-      setActionError("Failed to mark notifications as read. Please try again.");
-      setRetryAction(() => () => markAllRead());
+      setActionError("We could not update your notifications. Please retry.");
+    } finally {
+      setUpdating(false);
     }
   };
 
   return (
     <Layout>
-      {() => (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <div>
-              <h2 className="section-title">🔔 Notifications</h2>
-              <p className="section-subtitle">
-                {unread > 0 ? `${unread} unread notification${unread > 1 ? "s" : ""}` : "All caught up!"}
-              </p>
-            </div>
-            {unread > 0 && (
-              <button
-                onClick={markAllRead}
-                style={{ padding: "9px 18px", background: "#f1f5f9", color: "#475569", border: "1.5px solid var(--border)", borderRadius: "8px", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}
-              >
-                Mark all as read
-              </button>
-            )}
-          </div>
+      <PageHeading
+        eyebrow="Account updates"
+        title="Notifications"
+        description="Updates about your account activity and requests."
+        actions={items?.length > 0 && unread > 0 ? (
+          <Button variant="secondary" onClick={markAllRead} loading={updating}>
+            Mark all as read
+          </Button>
+        ) : null}
+      />
 
-          {actionError && (
-            <div className="alert alert-error" role="alert">
-              {actionError}{" "}
-              <button className="inline-retry" onClick={retryAction || fetchNotifs}>Try again</button>
-            </div>
-          )}
+      {!loading && notices.length > 0 && (
+        <section className="member-notifications-list" aria-label="Cooperative notices">
+          <h2>Cooperative notices</h2>
+          {notices.map((notice) => (
+            <article className="member-notification member-notification-info" key={notice.id}>
+              <div className="member-notification-content">
+                <span className="member-notification-kind">{notice.priority === "urgent" ? "Urgent notice" : "Notice"}</span>
+                <h3>{notice.title}</h3>
+                <p style={{ whiteSpace: "pre-wrap" }}>{notice.body}</p>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
 
-          {loading ? (
-            <p style={{ color: "#94a3b8" }}>Loading notifications...</p>
-          ) : error ? (
-            <div className="alert alert-error" role="alert">
-              {error}{" "}
-              <button className="inline-retry" onClick={fetchNotifs}>Retry</button>
-            </div>
-          ) : notifs.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">🔔</div>
-              <h3>No notifications yet</h3>
-              <p>You'll see updates about your account activity here.</p>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {notifs.map((n) => {
-                const s = TYPE_STYLE[n.type] || TYPE_STYLE.info;
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => {
-                      if (!n.is_read) markRead(n.id);
-                      if (n.link) navigate(n.link);
-                    }}
-                    style={{
-                      background:   n.is_read ? "#fff"   : s.bg,
-                      border:       `1.5px solid ${n.is_read ? "var(--border)" : s.border}`,
-                      borderRadius: "10px",
-                      padding:      "16px 20px",
-                      cursor:       n.link ? "pointer" : "default",
-                      display:      "flex",
-                      gap:          "14px",
-                      alignItems:   "flex-start",
-                      transition:   "box-shadow .15s",
-                      boxShadow:    n.is_read ? "none" : "var(--shadow-sm)",
-                      opacity:      n.is_read ? 0.75 : 1,
-                    }}
-                  >
-                    <span style={{ fontSize: "22px", flexShrink: 0 }}>{s.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                        <h4 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: n.is_read ? "#64748b" : s.color }}>
-                          {n.title}
-                        </h4>
-                        <span style={{ fontSize: "12px", color: "#94a3b8", whiteSpace: "nowrap", marginLeft: "12px" }}>
-                          {new Date(n.created_at).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: "13px", color: "#475569" }}>{n.message}</p>
-                    </div>
-                    {!n.is_read && (
-                      <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: s.color, flexShrink: 0, marginTop: "4px" }} />
-                    )}
+      {loading ? <LoadingState label="Loading notifications…" /> : loadError ? (
+        <FeedbackMessage
+          tone="danger"
+          title="Notifications could not be loaded"
+          action={<Button variant="secondary" onClick={fetchNotifications}>Retry</Button>}
+        >
+          {loadError}
+        </FeedbackMessage>
+      ) : items?.length === 0 && notices.length === 0 ? (
+        <section className="member-notifications-empty" aria-live="polite">
+          <Icon name="bell" size={22} />
+          <h2>All caught up!</h2>
+          <p>You’ll see updates about your account activity here.</p>
+        </section>
+      ) : (
+        <section className="member-notifications-list" aria-label="Your notifications">
+          <p className="member-notifications-summary" aria-live="polite">
+            {unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "No unread notifications."}
+          </p>
+          {actionError && <FeedbackMessage tone="danger" title="Update failed">{actionError}</FeedbackMessage>}
+          {(items ?? []).map((item) => (
+            <article className={`member-notification member-notification-${item.type || "info"}`} key={item.id}>
+              <div className="member-notification-mark" aria-hidden="true"><Icon name={item.type === "warning" || item.type === "error" ? "alert" : item.type === "success" ? "check" : "bell"} size={18} /></div>
+              <div className="member-notification-content">
+                <div className="member-notification-heading">
+                  <div>
+                    <span className="member-notification-kind">{typeLabel[item.type] || "Notification"}</span>
+                    <h2>{item.title}</h2>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+                  <time dateTime={item.created_at}>
+                    {item.created_at ? new Date(item.created_at).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" }) : ""}
+                  </time>
+                </div>
+                <p>{item.message}</p>
+                <div className="member-notification-actions">
+                  {!item.is_read && <Button size="sm" variant="secondary" disabled={updating} onClick={() => markRead(item.id)}>Mark as read</Button>}
+                  {item.link && <Button as={Link} size="sm" variant="ghost" to={item.link}>View update</Button>}
+                  <span className="member-notification-state">{item.is_read ? "Read" : "Unread"}</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
       )}
     </Layout>
   );

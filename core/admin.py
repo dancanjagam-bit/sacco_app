@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Savings, Loan, Transaction, LoanGuarantor, AssetCollateral, SACCOSettings, SASRAReport, SavingsDividend, ExitRequest, AuditFinding
+from django import forms
+from accounting.services import InvalidJournal
+from accounts.models import AuditLog
+from .services.transport_accounting import allocation_terms
+from .transport_models import TransportAllocationRule
+from django.utils import timezone
+from .models import (Savings, Loan, Transaction, LoanGuarantor, AssetCollateral, SACCOSettings, SASRAReport, SavingsDividend, ExitRequest, AuditFinding, TransportDeductionRule)
 
 
 @admin.register(Savings)
@@ -74,3 +80,72 @@ class AuditFindingAdmin(admin.ModelAdmin):
     list_filter   = ("severity", "status", "rule")
     search_fields = ("title", "description", "user")
     readonly_fields = ("audit_run_id", "created_at", "reviewed_by", "reviewed_at")
+
+
+@admin.register(TransportDeductionRule)
+class TransportDeductionRuleAdmin(admin.ModelAdmin):
+    list_display = ("version", "active", "approval_reference", "approved_by", "approved_at")
+    list_filter = ("active",)
+    readonly_fields = ("approved_by", "approved_at", "created_at")
+    fields = ("version", "deductible_categories", "approval_reference", "active", "approved_by", "approved_at", "created_at")
+
+    def has_module_permission(self, request):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_add_permission(self, request):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_change_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_superuser)
+
+    def has_delete_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_superuser)
+
+    def save_model(self, request, obj, form, change):
+        if obj.active:
+            obj.approved_by = request.user
+            obj.approved_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+class TransportAllocationRuleForm(forms.ModelForm):
+    def clean_allocations(self):
+        definition = self.cleaned_data["allocations"]
+        try:
+            allocation_terms(definition)
+        except InvalidJournal as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return definition
+
+    def clean(self):
+        data = super().clean()
+        if data.get("active") and TransportAllocationRule.objects.filter(
+            active=True,
+        ).exclude(pk=self.instance.pk).exists():
+            self.add_error("active", "Deactivate the current allocation version first.")
+        return data
+
+
+@admin.register(TransportAllocationRule)
+class TransportAllocationRuleAdmin(TransportDeductionRuleAdmin):
+    form = TransportAllocationRuleForm
+    fields = ("version", "allocations", "active", "approved_by", "approved_at", "created_at")
+    list_display = ("version", "active", "approved_by", "approved_at")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        return (*fields, "version", "allocations") if obj and obj.approved_at else fields
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        AuditLog.log(request.user, "other", f"Transport allocation policy {obj.version}", {
+            "operation": "allocation_policy_saved", "active": obj.active,
+            "approval_reference": obj.allocations["approval_reference"],
+        }, request)
+

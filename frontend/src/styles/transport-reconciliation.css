@@ -1,0 +1,15 @@
+.transport-reconciliation-page { display: grid; gap: 16px; width: 100%; max-width: 1080px; min-width: 0; margin-inline: auto; }
+.transport-reconciliation-list { display: grid; gap: 12px; }
+.transport-reconciliation-card { min-width: 0; }
+.transport-reconciliation-card-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.transport-reconciliation-card-head h2 { margin: 2px 0; font-size: 1.15rem; }
+.transport-reconciliation-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; padding: 0; list-style: none; }
+.transport-reconciliation-reasons li { padding: 4px 8px; color: var(--warning-text); background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: 999px; font-size: 13px; text-transform: capitalize; }
+.transport-reconciliation-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 10px; margin: 14px 0; }
+.transport-reconciliation-facts > div { min-width: 0; padding: 10px; background: var(--surface-muted); border-radius: var(--radius-sm); }
+.transport-reconciliation-facts dt { color: var(--text-muted); font-size: 14px; }
+.transport-reconciliation-facts dd { margin: 4px 0 0; color: var(--text); font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.transport-reconciliation-note { color: var(--text-muted); overflow-wrap: anywhere; }
+.transport-reconciliation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.transport-reconciliation-review { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+@media (max-width: 480px) { .transport-reconciliation-actions .ui-button { width: 100%; } }

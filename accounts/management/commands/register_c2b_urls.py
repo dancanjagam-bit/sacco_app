@@ -9,6 +9,7 @@ Usage:
 """
 import base64
 import logging
+from urllib.parse import quote
 
 import requests
 from django.conf import settings
@@ -48,10 +49,14 @@ class Command(BaseCommand):
         self.stdout.write(f"Token obtained. Registering URLs for shortcode {sc}...")
 
         # 2. Register C2B URLs
+        callback_token = settings.TRANSPORT_C2B_CALLBACK_TOKEN
+        confirmation_path = "/api/payments/mpesa/c2b/confirmation/"
+        if callback_token:
+            confirmation_path += f"{quote(callback_token, safe='')}/"
         payload = {
             "ShortCode":        sc,
             "ResponseType":     "Completed",   # always confirm even if validation is down
-            "ConfirmationURL":  f"{cb}/api/payments/mpesa/c2b/confirmation/",
+            "ConfirmationURL":  f"{cb}{confirmation_path}",
             "ValidationURL":    f"{cb}/api/payments/mpesa/c2b/validation/",
         }
         reg_url = f"{base}/mpesa/c2b/v1/registerurl"
@@ -73,7 +78,7 @@ class Command(BaseCommand):
         if data.get("ResponseCode") == "0" or "success" in str(data.get("ResponseDescription", "")).lower():
             self.stdout.write(self.style.SUCCESS(
                 f"\n  ✔  C2B URLs registered successfully!\n"
-                f"     Confirmation : {payload['ConfirmationURL']}\n"
+                f"     Confirmation : {cb}/api/payments/mpesa/c2b/confirmation/\n"
                 f"     Validation   : {payload['ValidationURL']}\n"
                 f"     Shortcode    : {sc}\n\n"
                 f"  Members can now deposit by:\n"

@@ -1,104 +1,56 @@
 import React, { useState } from "react";
-import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
+import MpesaPayModal from "./MpesaPayModal";
+import Button from "./ui/Button";
+import FeedbackMessage from "./ui/FeedbackMessage";
+import FormField from "./ui/FormField";
+import "../styles/repay-modal.css";
 
-function RepayLoanModal({
-  loan,
-  onClose,
-  onUpdated,
-}) {
+export default function RepayLoanModal({ loan, onClose, onUpdated }) {
+  const { user } = useAuth();
   const [amount, setAmount] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [reviewAmount, setReviewAmount] = useState(null);
+  const value = Number(amount);
+  const recordedBalance = loan.balance === null || loan.balance === undefined || loan.balance === ""
+    ? "Unavailable"
+    : Number.isFinite(Number(loan.balance))
+      ? `KES ${Number(loan.balance).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : "Unavailable";
 
-  const repayLoan = async () => {
-    if (!amount) {
-      alert("Enter a repayment amount.");
+  const continueToPayment = () => {
+    if (!Number.isFinite(value) || value <= 0) {
+      setError("Enter a repayment amount greater than zero.");
       return;
     }
-
-    setSaving(true);
-
-    try {
-      await api.post(
-        `loan/${loan.id}/repay/`,
-        {
-          amount,
-        }
-      );
-
-      alert("Repayment successful.");
-
-      onUpdated();
-      onClose();
-    } catch (err) {
-      alert(
-        err.response?.data?.error ||
-        "Repayment failed."
-      );
-    }
-
-    setSaving(false);
+    setError("");
+    setReviewAmount(value);
   };
 
+  if (reviewAmount !== null) {
+    return <MpesaPayModal
+      paymentType="repayment"
+      amount={reviewAmount}
+      loanId={loan.id}
+      defaultPhone={user?.phone_number || ""}
+      onClose={onClose}
+      onConfirmed={onUpdated}
+    />;
+  }
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          padding: 25,
-          borderRadius: 10,
-          width: 400,
-        }}
-      >
-        <h2>Repay Loan</h2>
-
-        <p>
-          Outstanding Balance:
-          <strong>
-            {" "}KES {loan.balance}
-          </strong>
-        </p>
-
-        <label>Repayment Amount</label>
-
-        <input
-          type="number"
-          value={amount}
-          onChange={(e) =>
-            setAmount(e.target.value)
-          }
-          style={{ width: "100%" }}
-        />
-
-        <br />
-        <br />
-
-        <button
-          onClick={repayLoan}
-          disabled={saving}
-        >
-          {saving
-            ? "Processing..."
-            : "Make Repayment"}
-        </button>
-
-        <button
-          onClick={onClose}
-          style={{ marginLeft: 10 }}
-        >
-          Cancel
-        </button>
-      </div>
+    <div className="repay-modal-overlay" role="presentation">
+      <section className="ui-panel repay-modal" role="dialog" aria-modal="true" aria-labelledby="repay-modal-title">
+        <header className="repay-modal-header"><div><p className="ui-eyebrow">Loan repayment</p><h2 id="repay-modal-title">Repay a loan</h2></div><Button variant="quiet" aria-label="Close repayment" onClick={onClose}>×</Button></header>
+        <div className="repay-modal-body">
+          <dl className="repay-loan-summary"><div><dt>Loan</dt><dd>#{loan.id}</dd></div><div><dt>Recorded balance</dt><dd>{recordedBalance}</dd></div></dl>
+          <FormField label="Repayment amount (KES)" htmlFor="repayment-amount" hint="The payment will remain pending until the provider confirms receipt." error={error}>
+            <input id="repayment-amount" className="ui-input" type="number" min="1" step="1" inputMode="decimal" value={amount} onChange={(event) => { setAmount(event.target.value); setError(""); }} />
+          </FormField>
+          <FeedbackMessage>Review the amount before continuing. Starting a request does not reduce your balance or confirm payment.</FeedbackMessage>
+          <div className="repay-modal-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="accent" onClick={continueToPayment}>Continue to M-Pesa</Button></div>
+        </div>
+      </section>
     </div>
   );
 }
-
-export default RepayLoanModal;

@@ -1,0 +1,315 @@
+/* =============================================================================
+   Nairobi West SACCO — Premium Dashboard Styles
+   Hero cards, bento grid, loan progress, transport widget
+============================================================================= */
+
+/* Hero metric card — blue gradient (admin) */
+.hero-metric-card {
+  background: var(--hero, linear-gradient(135deg, #0F4C81 0%, #1D4ED8 100%));
+  border-radius: 16px;
+  padding: 28px 32px;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  overflow: hidden;
+  position: relative;
+  min-height: 120px;
+}
+.hero-metric-card::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 180px; height: 180px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+.hero-metric-eyebrow {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.hero-metric-value {
+  margin: 0 0 6px;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.hero-metric-note {
+  margin: 0;
+  font-size: 14px;
+  color: #fff;
+  line-height: 1.5;
+  max-width: 72ch;
+}
+.hero-metric-icon {
+  flex-shrink: 0;
+  opacity: 0.35;
+}
+
+/* FOSA hero card — member dashboard */
+.fosa-hero-card {
+  background: var(--hero, linear-gradient(135deg, #0F4C81 0%, #1D4ED8 100%));
+  border-radius: 16px;
+  padding: 24px 28px;
+  color: #fff;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.fosa-hero-card::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  pointer-events: none;
+}
+.fosa-hero-label {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  position: relative;
+}
+.fosa-hero-value {
+  margin: 0 0 6px;
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  position: relative;
+}
+.fosa-hero-detail {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #fff;
+  position: relative;
+}
+.fosa-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: relative;
+}
+.fosa-hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font: 700 14px var(--font);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--duration-fast, 120ms) var(--ease), box-shadow var(--duration-fast, 120ms) var(--ease), background-color var(--duration-fast, 120ms) var(--ease);
+}
+.fosa-hero-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.fosa-hero-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.fosa-hero-btn-primary { background: #10B981; color: #0F172A; }
+.fosa-hero-btn-secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3) !important; }
+
+/* Balance toggle */
+.balance-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: 600 14px var(--font);
+  color: var(--navy-600);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.balance-toggle:hover { background: var(--indigo-50); }
+.balance-toggle:focus-visible { outline: 2px solid #0F4C81; outline-offset: 2px; }
+
+/* Loan progress widget */
+.loan-progress-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 0;
+}
+.loan-progress-bar-track {
+  height: 8px;
+  background: var(--navy-100);
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 10px 0 6px;
+}
+.loan-progress-bar-fill {
+  height: 100%;
+  background: #10B981;
+  border-radius: 99px;
+  transition: width 0.6s ease;
+}
+
+/* Bento grid for admin/member */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.bento-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* Action panels */
+.action-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.action-panel-left {}
+.action-panel-label {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy-900);
+}
+.action-panel-count {
+  margin: 0 0 10px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--navy-950);
+}
+
+/* Page background */
+.page-bg {
+  background: var(--bg);
+  min-height: 100%;
+}
+
+/* Chart panel override for premium */
+.premium-chart-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.premium-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+.premium-chart-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy-900);
+}
+.staff-dashboard-support { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; line-height: 1.45; }
+.staff-period-control { display: block; }
+.staff-dashboard-lower-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: var(--grid-gap); align-items: start; }
+.staff-queue-panel, .staff-activity-panel { min-width: 0; overflow: hidden; }
+.staff-queue-body { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.staff-queue-count { color: var(--text); font-size: 2rem; font-variant-numeric: tabular-nums; }
+.staff-activity-table { max-width: 100%; border: 0; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.staff-activity-table .ui-table { min-width: 660px; }
+.staff-activity-type { text-transform: capitalize; }
+.staff-dashboard { display: grid; gap: var(--grid-gap); width: 100%; min-width: 0; color: var(--text); }
+.staff-dashboard .ui-page-heading,
+.staff-dashboard .ui-feedback,
+.staff-dashboard .hero-metric-card,
+.staff-dashboard .premium-chart-panel { margin: 0; }
+.staff-refresh-indicator { margin: -8px 0 0; color: var(--text-muted); font-size: 14px; }
+.monthly-chart { width: 100%; min-width: 0; min-height: 260px; }
+.staff-dashboard .ui-empty { padding: 28px 18px; }
+.staff-dashboard .ui-empty p { margin: 6px 0 0; }
+.chart-period-select {
+  min-height: 44px;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: 600 14px var(--font);
+  color: var(--navy-700);
+  background: #fff;
+  cursor: pointer;
+  appearance: auto;
+}
+
+/* Transport widget */
+.transport-widget {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.transport-widget-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--indigo-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #0F4C81;
+}
+
+/* Alert banner */
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.alert-error {
+  background: var(--color-danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--color-danger-border);
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .bento-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .bento-grid { grid-template-columns: 1fr; }
+  .bento-grid-2col { grid-template-columns: 1fr; }
+  .hero-metric-card { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .hero-metric-icon { display: none; }
+  .fosa-hero-card { padding: 20px; }
+  .premium-chart-panel { padding: 16px; }
+  .action-panel { flex-direction: column; align-items: flex-start; }
+  .staff-queue-body { align-items: flex-start; flex-direction: column; }
+  .staff-queue-body .ui-button { width: 100%; }
+  .staff-dashboard .premium-chart-header { align-items: flex-start; flex-direction: column; }
+  .staff-dashboard .hero-metric-card { padding: 20px; }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .loan-progress-bar-fill,
+  .fosa-hero-btn,
+  .hero-metric-card { transition: none; }
+}

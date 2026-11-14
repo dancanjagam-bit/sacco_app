@@ -9,6 +9,7 @@ urlpatterns = [
     path("payments/mpesa/status/<str:checkout_request_id>/", payment_status, name="mpesa-status"),
 
     # Daraja posts STK callback here
+    path("payments/mpesa/transport-stk/<int:attempt_id>/<str:signature>/", mpesa_callback, name="transport-stk-callback"),
     path("payments/mpesa/<str:payment_type>/",     mpesa_callback,   name="mpesa-callback"),
     path("payments/mpesa/callback/",               mpesa_callback,   name="mpesa-callback-default",
          kwargs={"payment_type": ""}),
@@ -18,4 +19,5 @@ urlpatterns = [
     path("payments/mpesa/c2b/validation/",         c2b_validation,   name="mpesa-c2b-validation"),
     # Confirmation: called after money is received — credit member's account
     path("payments/mpesa/c2b/confirmation/",       c2b_confirmation, name="mpesa-c2b-confirmation"),
+    path("payments/mpesa/c2b/confirmation/<str:callback_token>/", c2b_confirmation, name="mpesa-c2b-token-confirmation"),
 ]

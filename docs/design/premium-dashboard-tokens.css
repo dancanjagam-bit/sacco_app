@@ -1,0 +1,166 @@
+/*
+ * Nairobi West Transport Cooperative — premium fintech design proposal
+ *
+ * Reviewable token set for the dashboard mockup. This file is intentionally
+ * not imported by the running app; opt in only after reviewing the design.
+ * Activate by adding data-design-system="premium-fintech" to <html> and
+ * importing this file from the app entry point.
+ *
+ * Contrast checks for intended combinations:
+ *   white on brand blue #0F4C81       8.86:1
+ *   white on action green #047857     5.48:1
+ *   navy text #0F172A on emerald      7.04:1
+ *   muted text #475569 on page        7.24:1
+ *   warning #92400E on warning fill   6.84:1
+ *   danger #BE123C on danger fill     5.72:1
+ *   white on gradient endpoint        6.70:1
+ */
+
+:root[data-design-system="premium-fintech"] {
+  color-scheme: light;
+
+  /* Brand and actions */
+  --nw-brand: #0F4C81;
+  --nw-brand-hover: #0B3A63;
+  --nw-brand-pressed: #082F50;
+  --nw-brand-strong: #1D4ED8;
+  --nw-emerald: #10B981;
+  --nw-action: #047857;
+  --nw-action-hover: #065F46;
+  --nw-action-pressed: #064E3B;
+  --nw-on-action: #FFFFFF;
+  --nw-focus: #1D4ED8;
+  --nw-hero: linear-gradient(135deg, #0F4C81 0%, #1D4ED8 100%);
+  --nw-hero-text: #FFFFFF;
+
+  /* Surfaces and text */
+  --nw-page: #F8FAFC;
+  --nw-surface: #FFFFFF;
+  --nw-surface-muted: #F1F5F9;
+  --nw-nav: #0F172A;
+  --nw-nav-hover: #1E293B;
+  --nw-text: #0F172A;
+  --nw-text-muted: #475569;
+  --nw-text-subtle: #64748B;
+  --nw-border: #E5E7EB;
+  --nw-border-strong: #CBD5E1;
+  --nw-control-border: #64748B;
+
+  /* Status: pair text/fill with a label or icon; never use color alone. */
+  --nw-success-text: #047857;
+  --nw-success-fill: #ECFDF5;
+  --nw-success-border: #A7F3D0;
+  --nw-warning-text: #92400E;
+  --nw-warning-fill: #FFFBEB;
+  --nw-warning-border: #FDE68A;
+  --nw-danger-text: #BE123C;
+  --nw-danger-fill: #FFF1F2;
+  --nw-danger-border: #FECDD3;
+  --nw-neutral-text: #475569;
+  --nw-neutral-fill: #F1F5F9;
+  --nw-neutral-border: #CBD5E1;
+
+  /* Charts: two data series plus quiet grid and labels. */
+  --nw-chart-primary: #0F4C81;
+  --nw-chart-secondary: #047857;
+  --nw-chart-grid: #E2E8F0;
+  --nw-chart-label: #475569;
+
+  /* Typography: package Inter locally; these fallbacks work offline. */
+  --nw-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --nw-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --nw-text-xs: 0.75rem;
+  --nw-text-sm: 0.875rem;
+  --nw-text-base: 1rem;
+  --nw-text-lg: 1.125rem;
+  --nw-text-xl: 1.25rem;
+  --nw-text-2xl: 1.5rem;
+  --nw-text-3xl: clamp(1.75rem, 1.45rem + 1.3vw, 2.5rem);
+  --nw-leading: 1.5;
+  --nw-weight-regular: 400;
+  --nw-weight-medium: 500;
+  --nw-weight-semibold: 600;
+  --nw-weight-bold: 700;
+
+  /* Spacing scale */
+  --nw-space-1: 0.25rem;
+  --nw-space-2: 0.5rem;
+  --nw-space-3: 0.75rem;
+  --nw-space-4: 1rem;
+  --nw-space-5: 1.25rem;
+  --nw-space-6: 1.5rem;
+  --nw-space-8: 2rem;
+  --nw-space-10: 2.5rem;
+  --nw-space-12: 3rem;
+  --nw-page-gutter: clamp(1rem, 3vw, 2rem);
+  --nw-card-padding: clamp(1rem, 2vw, 1.5rem);
+  --nw-grid-gap: clamp(0.75rem, 1.5vw, 1.25rem);
+
+  /* Shape and elevation: neutral cards, restrained depth. */
+  --nw-radius-sm: 0.5rem;
+  --nw-radius-control: 0.625rem;
+  --nw-radius-card: 1rem;
+  --nw-radius-dialog: 1.25rem;
+  --nw-radius-pill: 999px;
+  --nw-shadow-card: 0 1px 2px rgb(15 23 42 / 4%);
+  --nw-shadow-raised: 0 4px 12px rgb(15 23 42 / 7%);
+  --nw-shadow-nav: 0 8px 24px rgb(15 23 42 / 10%);
+  --nw-shadow-dialog: 0 20px 48px rgb(15 23 42 / 18%);
+
+  /* Interaction and layout */
+  --nw-duration-fast: 120ms;
+  --nw-duration-base: 180ms;
+  --nw-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --nw-focus-ring: 0 0 0 3px rgb(29 78 216 / 28%);
+  --nw-touch-target: 2.75rem;
+  --nw-content-max: 90rem;
+  --nw-sidebar-width: 16rem;
+  --nw-nav-inset: 0.75rem;
+
+  /* Reference breakpoints for media queries (custom properties aren't valid
+     in @media conditions, so use these values directly in media queries). */
+  --nw-breakpoint-phone: 40rem;
+  --nw-breakpoint-tablet: 64rem;
+  --nw-breakpoint-wide: 90rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-design-system="premium-fintech"] {
+    --nw-duration-fast: 0ms;
+    --nw-duration-base: 0ms;
+  }
+}
+
+/* Optional dark palette. Add data-theme="dark" alongside the opt-in flag. */
+:root[data-design-system="premium-fintech"][data-theme="dark"] {
+  color-scheme: dark;
+  --nw-page: #020617;
+  --nw-surface: #0F172A;
+  --nw-surface-muted: #1E293B;
+  --nw-nav: #020617;
+  --nw-nav-hover: #1E293B;
+  --nw-text: #F8FAFC;
+  --nw-text-muted: #CBD5E1;
+  --nw-text-subtle: #94A3B8;
+  --nw-border: #1E293B;
+  --nw-border-strong: #334155;
+  --nw-control-border: #64748B;
+  --nw-success-text: #6EE7B7;
+  --nw-success-fill: #064E3B;
+  --nw-success-border: #065F46;
+  --nw-warning-text: #FDE68A;
+  --nw-warning-fill: #78350F;
+  --nw-warning-border: #92400E;
+  --nw-danger-text: #FDA4AF;
+  --nw-danger-fill: #881337;
+  --nw-danger-border: #9F1239;
+  --nw-neutral-text: #CBD5E1;
+  --nw-neutral-fill: #1E293B;
+  --nw-neutral-border: #334155;
+  --nw-chart-grid: #334155;
+  --nw-chart-label: #CBD5E1;
+  --nw-shadow-card: none;
+  --nw-shadow-raised: 0 4px 16px rgb(0 0 0 / 24%);
+  --nw-shadow-nav: 0 8px 24px rgb(0 0 0 / 32%);
+  --nw-shadow-dialog: 0 20px 48px rgb(0 0 0 / 48%);
+}

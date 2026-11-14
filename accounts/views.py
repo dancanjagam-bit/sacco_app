@@ -15,7 +15,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 
 from members.models import Member
 from core.models import Savings, Loan
-from .models import OTPRequest, StaffProfile, Notification, AuditLog
+from .models import OTPRequest, StaffProfile, Notification, AuditLog, MemberNotice
+from .access import has_sacco_permission, is_staff_manager, requires_staff_login_2fa
 from sacco.notifications import send_welcome
 from accounts.services.otp_delivery import dispatch_otp
 
@@ -27,41 +28,19 @@ User = get_user_model()
 # ─────────────────────────────────────────────────────────────────────────────
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and (
-                getattr(request.user, "is_admin", False)
-                or request.user.is_staff
-                or request.user.is_superuser
-            )
-        )
+        return is_staff_manager(request.user)
 
 
 class IsSuperAdmin(BasePermission):
     """Only superuser or users with role='superadmin' can manage staff."""
     def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-        if request.user.is_superuser:
-            return True
-        try:
-            return request.user.staff_profile.role == "superadmin"
-        except Exception:
-            return False
+        return is_staff_manager(request.user)
 
 
 class IsKYCStaff(BasePermission):
-    """KYC access is limited to active KYC, secretary, or superadmin staff."""
+    """Identity document review is an explicit capability, not a staff flag."""
     def has_permission(self, request, view):
-        user = request.user
-        if not user.is_authenticated:
-            return False
-        if user.is_superuser or getattr(user, "is_admin", False):
-            return True
-        try:
-            profile = user.staff_profile
-            return profile.status == "active" and profile.role in {"kyc_officer", "secretary", "superadmin"}
-        except Exception:
-            return False
+        return has_sacco_permission(request.user, "kyc.review")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -288,7 +267,7 @@ def login_2fa(request):
     if not user:
         return Response({"error": "Invalid request or verification code."}, status=400)
 
-    if not user.is_active or not (user.is_staff or user.is_superuser or user.is_admin):
+    if not user.is_active or not requires_staff_login_2fa(user):
         return Response({"error": "This verification flow is only available to active staff accounts."}, status=403)
 
     with transaction.atomic():
@@ -606,9 +585,18 @@ def notification_list(request):
     notifs = Notification.objects.filter(user=request.user)
     unread = notifs.filter(is_read=False).count()
     notifs = notifs[:50]
+    notices = []
+    if request.user.is_member and Member.objects.filter(user=request.user, status="active").exists():
+        now = timezone.now()
+        notices = MemberNotice.objects.filter(
+            status="published", published_at__lte=now,
+        ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).order_by("-published_at", "-pk").values(
+            "id", "title", "body", "priority", "published_at",
+        )[:50]
 
     return Response({
         "unread_count": unread,
+        "member_notices": list(notices),
         "notifications": [
             {
                 "id":         n.id,

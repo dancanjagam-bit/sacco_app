@@ -1,75 +1,193 @@
-"""Loan eligibility from the currently approved, versioned database policy."""
+"""
+SACCO Loan Eligibility Engine
+==============================
+Rules:
+  1. Member must have at least MIN_SAVING_MONTHS distinct calendar months
+     of savings in the last LOOKBACK_MONTHS months.
+  2. Each qualifying month must have at least MIN_MONTHLY_AMOUNT deposited.
+  3. Loan multiplier scales with the number of consistent months:
+       < 6  months  →  not eligible
+       6–8  months  →  3× savings, interest band A
+       9–11 months  →  4× savings, interest band B
+       12+  months  →  5× savings, interest band C (best rates)
+  4. Interest rates per repayment period also depend on the tier.
+"""
+
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
+
 from django.db.models import Sum
-from django.db.models.functions import TruncMonth
-from django.utils import timezone
-from .models import Savings, LoanAssessmentPolicy
+from .models import Savings
 
 
-def get_active_policy():
-    return LoanAssessmentPolicy.objects.filter(active=True, approved_at__isnull=False).order_by("-approved_at").first()
+# ── Configuration ─────────────────────────────────────────────────────────────
+MIN_SAVING_MONTHS  = 6          # minimum consecutive/consistent months to qualify
+LOOKBACK_MONTHS    = 13         # how far back we look (slightly more than 1 year)
+MIN_MONTHLY_AMOUNT = Decimal("500.00")   # minimum deposit per qualifying month
 
 
-def get_valid_periods():
-    policy=get_active_policy()
-    return sorted(int(period) for period in (policy.rules.get("interest_rates",{}) if policy else {}))
+# ── Multiplier tiers ──────────────────────────────────────────────────────────
+TIERS = [
+    # (min_months, label,        multiplier, interest_band)
+    (12, "Gold (12+ months)",   Decimal("5"), "C"),
+    (9,  "Silver (9–11 months)",Decimal("4"), "B"),
+    (6,  "Bronze (6–8 months)", Decimal("3"), "A"),
+]
+
+# ── Interest rates per band per repayment period ──────────────────────────────
+INTEREST_RATES = {
+    #  months:  {band A, band B, band C}
+    3:  {"A": Decimal("5.00"), "B": Decimal("4.50"), "C": Decimal("4.00")},
+    6:  {"A": Decimal("7.00"), "B": Decimal("6.50"), "C": Decimal("6.00")},
+    12: {"A": Decimal("10.00"),"B": Decimal("9.00"), "C": Decimal("8.00")},
+    18: {"A": Decimal("12.00"),"B": Decimal("11.00"),"C": Decimal("10.00")},
+    24: {"A": Decimal("15.00"),"B": Decimal("13.00"),"C": Decimal("12.00")},
+    36: {"A": Decimal("18.00"),"B": Decimal("16.00"),"C": Decimal("14.00")},
+}
+VALID_PERIODS = sorted(INTEREST_RATES.keys())
 
 
-def get_consistent_months(user, policy=None):
-    policy=policy or get_active_policy()
-    if not policy:return []
-    lookback=int(policy.rules["lookback_months"])
-    minimum=Decimal(str(policy.rules["min_monthly_amount"]))
-    today=timezone.localdate()
-    start=(today-relativedelta(months=lookback)).replace(day=1)
-    monthly=(Savings.objects.filter(user=user,account_type="bosa",created_at__date__gte=start)
-        .annotate(month=TruncMonth("created_at")).values("month").annotate(total=Sum("amount")).order_by("month"))
-    totals={item["month"].date().replace(day=1):item["total"] for item in monthly}
-    months=[]; cursor=start; current=today.replace(day=1)
-    while cursor<current:
-        total=totals.get(cursor,Decimal("0"))
-        months.append({"month":cursor.strftime("%b %Y"),"month_date":cursor,"total":total,"qualifies":total>=minimum})
-        cursor=(cursor+relativedelta(months=1)).replace(day=1)
+def get_consistent_months(user) -> list[dict]:
+    """
+    Return a list of qualifying months for this user.
+    Each entry: { 'month': 'Jan 2026', 'total': Decimal, 'qualifies': bool }
+    Covers the last LOOKBACK_MONTHS calendar months (excluding the current month).
+    """
+    today       = date.today()
+    # Start from LOOKBACK_MONTHS months ago, beginning of that month
+    start_date  = (today - relativedelta(months=LOOKBACK_MONTHS)).replace(day=1)
+
+    # Aggregate deposits per calendar month
+    from django.db.models.functions import TruncMonth
+    monthly_qs = (
+        Savings.objects.filter(user=user, created_at__date__gte=start_date)
+        .annotate(month=TruncMonth("created_at"))
+        .values("month")
+        .annotate(total=Sum("amount"))
+        .order_by("month")
+    )
+
+    totals_by_month = {
+        entry["month"].date().replace(day=1): entry["total"]
+        for entry in monthly_qs
+    }
+
+    months = []
+    cursor = start_date
+    # Walk each calendar month up to (but not including) the current month
+    current_month_start = today.replace(day=1)
+    while cursor < current_month_start:
+        total     = totals_by_month.get(cursor, Decimal("0"))
+        qualifies = total >= MIN_MONTHLY_AMOUNT
+        months.append({
+            "month":     cursor.strftime("%b %Y"),
+            "month_date": cursor,
+            "total":     total,
+            "qualifies": qualifies,
+        })
+        cursor = (cursor + relativedelta(months=1)).replace(day=1)
+
     return months
 
 
-def get_eligibility(user):
-    policy=get_active_policy()
-    savings_total= Savings.objects.filter(user=user).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-    bosa= Savings.objects.filter(user=user,account_type="bosa").aggregate(total=Sum("amount"))["total"] or Decimal("0")
-    if not policy:
-        return {"eligible":False,"consistent_months":0,"tier_label":None,"multiplier":Decimal("0"),
-            "interest_band":None,"max_loan":Decimal("0"),"total_savings":savings_total,"bosa_balance":bosa,
-            "months_detail":[],"months_needed":0,"next_tier_months":0,"rejection_reason":"No active approved loan policy is configured.",
-            "policy_version":None,"interest_rates":{},"min_monthly_amount":None}
-    rules=policy.rules
-    details=get_consistent_months(user,policy)
-    count=sum(1 for month in details if month["qualifies"])
-    tiers=sorted(rules.get("tiers",[]),key=lambda item:int(item["min_months"]),reverse=True)
-    selected=next((tier for tier in tiers if count>=int(tier["min_months"])),None)
-    multiplier=Decimal(str(selected["multiplier"])) if selected else Decimal("0")
-    band=selected.get("interest_band") if selected else None
-    rates={str(k):{str(key):float(value) for key,value in v.items()} for k,v in rules.get("interest_rates",{}).items()}
-    minimum=int(rules["min_saving_months"])
-    needed=max(0,minimum-count)
-    eligible=bool(selected and bosa>0)
-    reason=""
+def get_eligibility(user) -> dict:
+    """
+    Full eligibility report for a user.
+    Returns a dict with:
+      eligible         bool
+      consistent_months int  (number of qualifying months in lookback window)
+      tier_label       str
+      multiplier       Decimal
+      interest_band    str ("A"/"B"/"C" or None)
+      max_loan         Decimal
+      total_savings    Decimal
+      months_detail    list[dict]
+      months_needed    int  (how many more months needed to qualify)
+      next_tier_months int  (months needed to reach next tier)
+      rejection_reason str  (if not eligible)
+    """
+    months_detail  = get_consistent_months(user)
+    qualifying     = [m for m in months_detail if m["qualifies"]]
+    consistent_count = len(qualifying)
+
+    # BOSA balance is the multiplier base (core shares only)
+    bosa_balance = (
+        Savings.objects.filter(user=user, account_type="bosa")
+        .aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    )
+    # Total savings for context display
+    total_savings = (
+        Savings.objects.filter(user=user)
+        .aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    )
+
+    # Determine tier
+    tier_label    = None
+    multiplier    = Decimal("0")
+    interest_band = None
+    for min_m, label, mult, band in TIERS:
+        if consistent_count >= min_m:
+            tier_label    = label
+            multiplier    = mult
+            interest_band = band
+            break
+
+    eligible = multiplier > 0
+    max_loan = bosa_balance * multiplier
+
+    months_needed = max(0, MIN_SAVING_MONTHS - consistent_count)
+
+    # Next tier
+    next_tier_months = 0
+    current_min = next(
+        (min_m for min_m, *_ in TIERS if consistent_count >= min_m),
+        0
+    )
+    higher_tiers = [(m, *r) for m, *r in TIERS if m > current_min]
+    if higher_tiers:
+        next_tier_months = higher_tiers[-1][0] - consistent_count
+
+    rejection_reason = ""
     if not eligible:
-        reason=("No BOSA savings are recorded." if bosa<=0 else
-            f"You need at least {minimum} qualifying BOSA savings months; {count} currently qualify.")
-    current_min=max((int(t["min_months"]) for t in tiers if count>=int(t["min_months"])),default=0)
-    next_tier=min((int(t["min_months"]) for t in tiers if int(t["min_months"])>current_min),default=current_min)
-    return {"eligible":eligible,"consistent_months":count,"tier_label":selected.get("label") if selected else None,
-        "multiplier":multiplier,"interest_band":band,"max_loan":bosa*multiplier,"total_savings":savings_total,
-        "bosa_balance":bosa,"months_detail":[{"month":m["month"],"total":float(m["total"]),"qualifies":m["qualifies"]} for m in details],
-        "months_needed":needed,"next_tier_months":max(0,next_tier-count),"rejection_reason":reason,
-        "min_monthly_amount":Decimal(str(rules["min_monthly_amount"])),"interest_rates":rates,"policy_version":policy.version}
+        if bosa_balance <= 0:
+            rejection_reason = "You have no BOSA (core share) savings on record. Loan eligibility is based on BOSA savings only."
+        else:
+            rejection_reason = (
+                f"You need at least {MIN_SAVING_MONTHS} months of consistent BOSA savings "
+                f"(minimum KES {MIN_MONTHLY_AMOUNT:,.0f}/month). "
+                f"You currently have {consistent_count} qualifying month(s). "
+                f"Save for {months_needed} more month(s) to become eligible."
+            )
+
+    return {
+        "eligible":          eligible,
+        "consistent_months": consistent_count,
+        "tier_label":        tier_label,
+        "multiplier":        multiplier,
+        "interest_band":     interest_band,
+        "max_loan":          max_loan,
+        "total_savings":     total_savings,
+        "bosa_balance":      bosa_balance,
+        "months_detail":     months_detail,
+        "months_needed":     months_needed,
+        "next_tier_months":  next_tier_months,
+        "rejection_reason":  rejection_reason,
+        "min_monthly_amount": MIN_MONTHLY_AMOUNT,
+        "interest_rates":    {
+            str(k): {
+                band: float(rate)
+                for band, rate in v.items()
+            }
+            for k, v in INTEREST_RATES.items()
+        },
+    }
 
 
-def get_interest_rate(repayment_months, interest_band):
-    policy=get_active_policy()
-    if not policy:return None
-    value=policy.rules.get("interest_rates",{}).get(str(repayment_months),{}).get(str(interest_band))
-    return Decimal(str(value)) if value is not None else None
+def get_interest_rate(repayment_months: int, interest_band: str) -> Decimal:
+    rates = INTEREST_RATES.get(repayment_months)
+    if not rates:
+        # Default to nearest valid period
+        nearest = min(VALID_PERIODS, key=lambda p: abs(p - repayment_months))
+        rates = INTEREST_RATES[nearest]
+    return rates.get(interest_band, Decimal("10.00"))

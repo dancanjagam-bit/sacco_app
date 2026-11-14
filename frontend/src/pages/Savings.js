@@ -1,357 +1,232 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
-import { useAuth } from "../context/AuthContext";
+import MpesaPayModal from "../components/MpesaPayModal";
 import api from "../api/axios";
-import "../styles/dashboard.css";
+import { useAuth } from "../context/AuthContext";
+import AccountCard from "../components/ui/AccountCard";
+import Button from "../components/ui/Button";
+import DataTable from "../components/ui/DataTable";
+import FeedbackMessage from "../components/ui/FeedbackMessage";
+import FormField from "../components/ui/FormField";
+import Icon from "../components/ui/Icon";
+import LoadingState from "../components/ui/LoadingState";
+import PageHeading from "../components/ui/PageHeading";
+import StatusBadge from "../components/ui/StatusBadge";
+import "../styles/savings.css";
+
+const money = (value) => {
+  if (value === null || value === undefined || value === "") return "Unavailable";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `KES ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Unavailable";
+};
+const date = (value) => value ? new Date(value).toLocaleDateString("en-KE") : "—";
 
 export default function Savings() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
+  const [tab, setTab] = useState("overview");
+  const [collateral, setCollateral] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [balanceError, setBalanceError] = useState(false);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [withdrawalsLoading, setWithdrawalsLoading] = useState(true);
+  const [withdrawalsError, setWithdrawalsError] = useState(false);
+  const [statement, setStatement] = useState(null);
+  const [statementState, setStatementState] = useState("idle");
+  const [exitRequest, setExitRequest] = useState(null);
+  const [exitLoading, setExitLoading] = useState(false);
+  const [exitError, setExitError] = useState(false);
+  const [exitReason, setExitReason] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositAccount, setDepositAccount] = useState("bosa");
+  const [paymentAmount, setPaymentAmount] = useState(null);
+  const [depositError, setDepositError] = useState("");
+  const [depositBusy, setDepositBusy] = useState(false);
 
-  const [tab,         setTab]         = useState("overview");
-  const [msg,         setMsg]         = useState(null);
-  const [collateral,  setCollateral]  = useState(null);
-  const [statement,   setStatement]   = useState(null);
-  const [exitReq,     setExitReq]     = useState(null);
-
-  // Deposit form
-  const [depositAmt,      setDepositAmt]      = useState("");
-  const [depositAccount,  setDepositAccount]  = useState("bosa");
-  const [depositing,      setDepositing]      = useState(false);
-
-  // FOSA Withdrawal form
-  const [withdrawAmt,   setWithdrawAmt]   = useState("");
-  const [withdrawing,   setWithdrawing]   = useState(false);
-
-  // Exit request form
-  const [exitReason,    setExitReason]    = useState("");
-  const [submittingExit, setSubmittingExit] = useState(false);
-
-  const fetchCollateral = useCallback(async () => {
-    try { const r = await api.get("collateral/status/"); setCollateral(r.data); } catch {}
-  }, []);
-
-  const fetchStatement = useCallback(async () => {
-    try { const r = await api.get("savings/statement/"); setStatement(r.data); } catch {}
-  }, []);
-
-  const fetchExitReq = useCallback(async () => {
-    try { const r = await api.get("exit-request/"); setExitReq(r.data.exit_request); } catch {}
-  }, []);
-
-  useEffect(() => {
-    fetchCollateral();
-    fetchExitReq();
-  }, [fetchCollateral, fetchExitReq]);
-
-  useEffect(() => {
-    if (tab === "statement") fetchStatement();
-  }, [tab, fetchStatement]);
-
-  const bosa    = Number(collateral?.bosa_balance   || user?.total_savings || 0);
-  const fosa    = Number(collateral?.fosa_balance    || 0);
-  const fosaW   = Number(collateral?.fosa_withdrawable || 0);
-  const locked  = Number(collateral?.total_locked    || 0);
-
-  // ── Deposit ─────────────────────────────────────────────────────────────
-  const handleDeposit = async () => {
-    const value = parseFloat(depositAmt);
-    if (!value || value <= 0) { setMsg({ type: "error", text: "Enter a valid amount." }); return; }
-    setDepositing(true); setMsg(null);
+  const loadBalances = useCallback(async () => {
+    setBalanceLoading(true);
+    setBalanceError(false);
     try {
-      await api.post("deposit/", { amount: value, account_type: depositAccount });
-      setDepositAmt("");
-      await refreshUser();
-      await fetchCollateral();
-      setMsg({ type: "success", text: `KES ${value.toLocaleString()} deposited to ${depositAccount.toUpperCase()}.` });
-    } catch (err) {
-      setMsg({ type: "error", text: err.response?.data?.error || "Deposit failed." });
-    } finally { setDepositing(false); }
+      const response = await api.get("collateral/status/");
+      if (!response.data || typeof response.data !== "object") throw new Error("Invalid balance response");
+      setCollateral(response.data);
+    } catch {
+      setCollateral(null);
+      setBalanceError(true);
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, []);
+
+  const loadWithdrawals = useCallback(async () => {
+    setWithdrawalsLoading(true);
+    setWithdrawalsError(false);
+    try {
+      const response = await api.get("withdrawals/");
+      const rows = Array.isArray(response.data) ? response.data : response.data?.results;
+      if (!Array.isArray(rows)) throw new Error("Invalid withdrawal response");
+      setWithdrawals(rows);
+    } catch {
+      setWithdrawals([]);
+      setWithdrawalsError(true);
+    } finally {
+      setWithdrawalsLoading(false);
+    }
+  }, []);
+
+  const loadExit = useCallback(async () => {
+    setExitLoading(true);
+    setExitError(false);
+    try {
+      const response = await api.get("exit-request/");
+      setExitRequest(response.data?.exit_request || null);
+    } catch {
+      setExitError(true);
+    } finally {
+      setExitLoading(false);
+    }
+  }, []);
+
+  const loadStatement = useCallback(async () => {
+    setStatementState("loading");
+    try {
+      const response = await api.get("savings/statement/");
+      if (!Array.isArray(response.data?.entries)) throw new Error("Invalid statement response");
+      setStatement(response.data);
+      setStatementState("success");
+    } catch {
+      setStatement(null);
+      setStatementState("error");
+    }
+  }, []);
+
+  useEffect(() => { loadBalances(); loadWithdrawals(); loadExit(); }, [loadBalances, loadWithdrawals, loadExit]);
+  useEffect(() => { if (tab === "statement") loadStatement(); }, [tab, loadStatement]);
+
+  const depositValue = Number(depositAmount);
+  const validDeposit = Number.isFinite(depositValue) && depositValue > 0;
+  const format = (value) => value === null || value === undefined ? "Unavailable" : money(value);
+  const pendingHold = collateral?.fosa_withdrawals_pending ?? collateral?.pending_withdrawals ?? null;
+
+  const openDeposit = () => {
+    setDepositError("");
+    if (!validDeposit) { setDepositError("Enter an amount greater than zero."); return; }
+    setPaymentAmount(depositValue);
   };
 
-  // ── FOSA Withdraw ────────────────────────────────────────────────────────
-  const handleWithdraw = async () => {
-    const value = parseFloat(withdrawAmt);
-    if (!value || value <= 0) { setMsg({ type: "error", text: "Enter a valid amount." }); return; }
-    setWithdrawing(true); setMsg(null);
+  const submitExit = async () => {
+    setDepositBusy(true);
+    setDepositError("");
     try {
-      const r = await api.post("withdraw/", { amount: value, account_type: "fosa" });
-      setWithdrawAmt("");
-      await refreshUser();
-      await fetchCollateral();
-      setMsg({ type: "success", text: r.data.message });
-    } catch (err) {
-      setMsg({ type: "error", text: err.response?.data?.error || "Withdrawal failed." });
-    } finally { setWithdrawing(false); }
-  };
-
-  // ── Submit Exit Request ──────────────────────────────────────────────────
-  const handleExitRequest = async () => {
-    setSubmittingExit(true); setMsg(null);
-    try {
-      const r = await api.post("exit-request/", { reason: exitReason });
+      await api.post("exit-request/", { reason: exitReason });
       setExitReason("");
-      await fetchExitReq();
-      setMsg({ type: "success", text: r.data.message });
-    } catch (err) {
-      setMsg({ type: "error", text: err.response?.data?.error || "Failed to submit exit request." });
-    } finally { setSubmittingExit(false); }
+      await loadExit();
+    } catch (error) {
+      setDepositError(error.response?.data?.error || "Your exit request could not be submitted. Try again.");
+    } finally { setDepositBusy(false); }
   };
 
-  const handleCancelExit = async () => {
-    if (!exitReq || !window.confirm("Cancel your exit request?")) return;
+  const cancelExit = async () => {
+    if (!exitRequest || !window.confirm("Cancel your exit request?")) return;
+    setDepositBusy(true);
     try {
-      await api.post(`exit-request/${exitReq.id}/cancel/`);
-      await fetchExitReq();
-      setMsg({ type: "success", text: "Exit request cancelled." });
-    } catch { setMsg({ type: "error", text: "Cancel failed." }); }
+      await api.post(`exit-request/${exitRequest.id}/cancel/`);
+      await loadExit();
+    } catch (error) {
+      setDepositError(error.response?.data?.error || "Your request could not be cancelled.");
+    } finally { setDepositBusy(false); }
   };
-
-  const TabBtn = ({ k, label }) => (
-    <button onClick={() => setTab(k)} style={{
-      padding: "8px 18px", border: "none", borderRadius: "8px", fontSize: "13px",
-      fontWeight: "600", cursor: "pointer",
-      background: tab === k ? "#fff" : "transparent",
-      color:      tab === k ? "#2563eb" : "#64748b",
-      boxShadow:  tab === k ? "var(--shadow-sm)" : "none",
-    }}>{label}</button>
-  );
-
-  const exitStatusColor = { pending: "#f59e0b", approved: "#2563eb", funds_released: "#16a34a", rejected: "#dc2626", cancelled: "#94a3b8" };
 
   return (
     <Layout>
       {() => (
-        <>
-          <h2 className="section-title">💰 Savings</h2>
-          <p className="section-subtitle">BOSA (Core Shares) + FOSA (Flexible Savings)</p>
+        <div className="savings-page">
+          <PageHeading
+            eyebrow="Member accounts"
+            title="Savings"
+            description="Review recorded account balances, available funds, and pending withdrawal requests."
+            actions={<Button as={Link} to="/transactions" variant="secondary"><Icon name="receipt" /> View transactions</Button>}
+          />
 
-          {/* Account summary cards */}
-          <div className="summary-grid" style={{ marginBottom: "16px" }}>
-            <div style={{ background: "linear-gradient(135deg, #1e3a8a, #2563eb)", borderRadius: "12px", padding: "22px", color: "#fff", boxShadow: "var(--shadow)" }}>
-              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".6px", color: "rgba(255,255,255,.65)" }}>BOSA — Core Shares</p>
-              <h2 style={{ margin: "0 0 4px", fontSize: "28px", fontWeight: "800" }}>KES {bosa.toLocaleString()}</h2>
-              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,.55)" }}>Loan multiplier base · Non-withdrawable · Earns dividends</p>
-            </div>
-            <div style={{ background: "linear-gradient(135deg, #065f46, #10b981)", borderRadius: "12px", padding: "22px", color: "#fff", boxShadow: "var(--shadow)" }}>
-              <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: ".6px", color: "rgba(255,255,255,.65)" }}>FOSA — Flexible Savings</p>
-              <h2 style={{ margin: "0 0 4px", fontSize: "28px", fontWeight: "800" }}>KES {fosa.toLocaleString()}</h2>
-              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,.55)" }}>Withdrawable anytime · Voluntary deposits · Salary processing</p>
-            </div>
-            {locked > 0 && (
-              <div className="summary-card" style={{ borderTopColor: "#f59e0b" }}>
-                <h4>🔒 Total Locked</h4>
-                <h2>KES {locked.toLocaleString()}</h2>
-                <p>As loan collateral</p>
-              </div>
-            )}
-            <div className="summary-card" style={{ borderTopColor: "#16a34a" }}>
-              <h4>✅ FOSA Withdrawable</h4>
-              <h2>KES {fosaW.toLocaleString()}</h2>
-              <p>Available to withdraw now</p>
-            </div>
+          <div className="savings-account-grid">
+            <AccountCard label="FOSA available" value={balanceLoading ? undefined : format(collateral?.fosa_withdrawable)} helper="Available after recorded holds" icon="coins" loading={balanceLoading} />
+            <AccountCard label="Recorded FOSA balance" value={balanceLoading ? undefined : format(collateral?.fosa_balance)} helper="Flexible savings account balance" icon="wallet" loading={balanceLoading} />
+            <AccountCard label="Pending withdrawal holds" value={balanceLoading ? undefined : format(pendingHold)} helper="Pending or uncertain payout requests" icon="clock" loading={balanceLoading} />
+            <AccountCard label="Recorded BOSA savings" value={balanceLoading ? undefined : format(collateral?.bosa_balance)} helper="BOSA recorded savings; share capital is tracked separately when available" icon="bank" loading={balanceLoading} />
           </div>
 
-          {/* Collateral breakdown */}
-          {collateral && collateral.total_locked > 0 && (
-            <div style={{ background: "#fff", borderRadius: "12px", padding: "18px 22px", boxShadow: "var(--shadow)", marginBottom: "20px", borderLeft: "4px solid #f59e0b" }}>
-              <p style={{ margin: "0 0 10px", fontWeight: "700", fontSize: "14px" }}>🔒 Locked Balance Breakdown</p>
-              <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", fontSize: "13px" }}>
-                {collateral.locked_own_loans > 0 && <span>Own loan collateral: <strong>KES {Number(collateral.locked_own_loans).toLocaleString()}</strong></span>}
-                {collateral.locked_guarantor > 0 && <span>Guarantor pledges: <strong>KES {Number(collateral.locked_guarantor).toLocaleString()}</strong></span>}
-              </div>
-              {collateral.pledges_detail?.filter(p => p.is_active && p.locked > 0).map((p, i) => (
-                <p key={i} style={{ margin: "6px 0 0", fontSize: "12px", color: "#64748b" }}>
-                  Guaranteeing {p.borrower} (Loan #{p.loan_id}): KES {Number(p.locked).toLocaleString()} locked · KES {Number(p.released).toLocaleString()} released
-                </p>
-              ))}
-            </div>
-          )}
+          {balanceError && <FeedbackMessage tone="warning" title="Balance availability could not be refreshed" action={<Button variant="secondary" size="sm" onClick={loadBalances}><Icon name="refresh" /> Retry</Button>}>Available and held amounts remain unavailable until the balance service responds.</FeedbackMessage>}
 
-          {msg && <div className={`alert alert-${msg.type}`}>{msg.text}</div>}
-
-          {/* Tab bar */}
-          <div style={{ display: "flex", gap: "4px", marginBottom: "20px", background: "#f1f5f9", borderRadius: "10px", padding: "4px", width: "fit-content" }}>
-            <TabBtn k="overview"   label="💳 Deposit & Withdraw" />
-            <TabBtn k="statement"  label="📄 Statement" />
-            <TabBtn k="exit"       label="🚪 Exit SACCO" />
+          <div className="savings-tabs" role="tablist" aria-label="Savings sections">
+            <button type="button" role="tab" aria-selected={tab === "overview"} onClick={() => setTab("overview")}>Balances and activity</button>
+            <button type="button" role="tab" aria-selected={tab === "statement"} onClick={() => setTab("statement")}>Savings statement</button>
+            <button type="button" role="tab" aria-selected={tab === "exit"} onClick={() => setTab("exit")}>Membership exit</button>
           </div>
 
-          {/* ── OVERVIEW TAB ── */}
-          {tab === "overview" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-
-              {/* Deposit */}
-              <div style={{ background: "#fff", borderRadius: "12px", padding: "22px", boxShadow: "var(--shadow)" }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: "700" }}>📥 Make a Deposit</h3>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#475569", textTransform: "uppercase", marginBottom: "5px" }}>
-                  Account Type
-                </label>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                  {[["bosa","BOSA (Core Shares)"],["fosa","FOSA (Flexible)"]].map(([k,l]) => (
-                    <button key={k} onClick={() => setDepositAccount(k)} style={{
-                      flex: 1, padding: "10px", border: `2px solid ${depositAccount === k ? "#2563eb" : "#e2e8f0"}`,
-                      borderRadius: "8px", background: depositAccount === k ? "#eff6ff" : "#f8fafc",
-                      color: depositAccount === k ? "#2563eb" : "#64748b", fontWeight: "700",
-                      fontSize: "13px", cursor: "pointer",
-                    }}>{l}</button>
+          {tab === "overview" && <div className="savings-content-grid">
+            <section className="ui-panel savings-panel" aria-labelledby="deposit-title">
+              <div className="ui-panel-header"><h2 className="ui-panel-title" id="deposit-title">Make a deposit</h2><Icon name="coins" /></div>
+              <div className="ui-panel-body savings-form">
+                <p className="ui-muted">Deposits are added to your account only after the payment provider confirms them.</p>
+                <fieldset className="savings-account-choice">
+                  <legend>Deposit account</legend>
+                  {[{ value: "bosa", label: "BOSA", detail: "Core savings" }, { value: "fosa", label: "FOSA", detail: "Flexible savings" }].map((account) => (
+                    <label className={depositAccount === account.value ? "selected" : ""} key={account.value}>
+                      <input type="radio" name="deposit-account" value={account.value} checked={depositAccount === account.value} onChange={() => setDepositAccount(account.value)} />
+                      <span><strong>{account.label}</strong><small>{account.detail}</small></span>
+                    </label>
                   ))}
-                </div>
-                {depositAccount === "bosa" && (
-                  <div style={{ background: "#eff6ff", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#1e40af" }}>
-                    💡 Mandatory minimum: KES 1,000/month. BOSA earns annual dividends and is your loan collateral base.
-                  </div>
-                )}
-                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#475569", textTransform: "uppercase", marginBottom: "5px" }}>Amount (KES)</label>
-                <input
-                  type="number" className="amount-input" style={{ width: "100%", marginBottom: "12px" }}
-                  placeholder="e.g. 2,000" value={depositAmt} min="1"
-                  onChange={e => setDepositAmt(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleDeposit()}
-                />
-                <button onClick={handleDeposit} disabled={depositing} style={{ width: "100%", padding: "11px", border: "none", borderRadius: "8px", background: "#2563eb", color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>
-                  {depositing ? "Processing..." : `💰 Deposit to ${depositAccount.toUpperCase()}`}
-                </button>
+                </fieldset>
+                {depositAccount === "bosa" && <FeedbackMessage>Routine BOSA deposits are not a share-capital register and are not routine withdrawals.</FeedbackMessage>}
+                <FormField label="Amount (KES)" htmlFor="savings-deposit-amount" error={depositError}>
+                  <input id="savings-deposit-amount" className="ui-input" type="number" min="1" step="1" inputMode="decimal" value={depositAmount} onChange={(event) => { setDepositAmount(event.target.value); setDepositError(""); }} placeholder="Enter amount" />
+                </FormField>
+                <Button variant="accent" onClick={openDeposit} disabled={depositBusy}><Icon name="wallet" /> Continue to M-Pesa</Button>
               </div>
+            </section>
 
-              {/* FOSA Withdraw */}
-              <div style={{ background: "#fff", borderRadius: "12px", padding: "22px", boxShadow: "var(--shadow)" }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: "700" }}>📤 FOSA Withdrawal</h3>
-                <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#64748b" }}>Withdraw from your flexible FOSA account anytime.</p>
-
-                <div style={{ background: "#f0fdf4", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#15803d" }}>
-                  Available: <strong>KES {fosaW.toLocaleString()}</strong> of KES {fosa.toLocaleString()} FOSA balance
-                </div>
-
-                {fosa <= 0 ? (
-                  <p style={{ color: "#94a3b8", fontSize: "13px" }}>No FOSA balance to withdraw.</p>
-                ) : (
-                  <>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#475569", textTransform: "uppercase", marginBottom: "5px" }}>Amount (KES)</label>
-                    <input
-                      type="number" className="amount-input" style={{ width: "100%", marginBottom: "6px" }}
-                      placeholder={`Max KES ${fosaW.toLocaleString()}`} value={withdrawAmt}
-                      min="1" max={fosaW} onChange={e => setWithdrawAmt(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && handleWithdraw()}
-                    />
-                    <button onClick={handleWithdraw} disabled={withdrawing} style={{ width: "100%", padding: "11px", border: "none", borderRadius: "8px", background: "#10b981", color: "#fff", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>
-                      {withdrawing ? "Processing..." : "📤 Withdraw FOSA"}
-                    </button>
-                  </>
-                )}
-
-                <div style={{ marginTop: "16px", padding: "12px", background: "#fef2f2", borderRadius: "8px", fontSize: "12px", color: "#991b1b", borderLeft: "3px solid #fca5a5" }}>
-                  🔒 <strong>BOSA is non-withdrawable</strong> while you are an active member. To access BOSA funds, submit an Exit Request.
-                </div>
+            <section className="ui-panel savings-panel" aria-labelledby="withdrawal-title">
+              <div className="ui-panel-header"><div><p className="ui-eyebrow">Funds access</p><h2 className="ui-panel-title" id="withdrawal-title">FOSA withdrawal status</h2></div></div>
+              <div className="ui-panel-body savings-form">
+                <dl className="savings-facts">
+                  <div><dt>Available</dt><dd>{balanceLoading ? "Loading…" : format(collateral?.fosa_withdrawable)}</dd></div>
+                  <div><dt>FOSA balance</dt><dd>{balanceLoading ? "Loading…" : format(collateral?.fosa_balance)}</dd></div>
+                  <div><dt>Held for pending withdrawals</dt><dd>{balanceLoading ? "Loading…" : format(pendingHold)}</dd></div>
+                </dl>
+                <FeedbackMessage tone="warning" title="Withdrawals are unavailable">Live M-Pesa disbursement is not configured. No withdrawal can be submitted from this account.</FeedbackMessage>
+                <p className="ui-muted">A request acceptance is not proof that funds were paid. Uncertain or pending payouts remain held for review.</p>
+                {withdrawalsError && <FeedbackMessage tone="danger" title="Withdrawal history could not be loaded" action={<Button variant="secondary" size="sm" onClick={loadWithdrawals}><Icon name="refresh" /> Retry</Button>}>Try again to see the latest payout status.</FeedbackMessage>}
               </div>
-            </div>
-          )}
+            </section>
 
-          {/* ── STATEMENT TAB ── */}
-          {tab === "statement" && (
-            <div style={{ background: "#fff", borderRadius: "12px", boxShadow: "var(--shadow)" }}>
-              {!statement ? (
-                <p style={{ padding: "20px", color: "#94a3b8" }}>Loading statement...</p>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr><th>Date</th><th>Account</th><th>Type</th><th>Amount</th><th>Balance</th></tr>
-                  </thead>
-                  <tbody>
-                    {(statement.entries || []).length === 0 ? (
-                      <tr><td colSpan="5" style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>No transactions yet.</td></tr>
-                    ) : (statement.entries || []).map((e, i) => (
-                      <tr key={i}>
-                        <td style={{ fontSize: "13px" }}>{new Date(e.created_at).toLocaleDateString("en-KE")}</td>
-                        <td><span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "700", background: e.account_type === "bosa" ? "#dbeafe" : "#dcfce7", color: e.account_type === "bosa" ? "#1e40af" : "#15803d" }}>{(e.account_type || "fosa").toUpperCase()}</span></td>
-                        <td><span className={`status status-${e.type === "Deposit" ? "approved" : "pending"}`}>{e.type}</span></td>
-                        <td style={{ fontWeight: "600", color: e.type === "Deposit" ? "#15803d" : "#b45309" }}>
-                          {e.type === "Deposit" ? "+" : "−"} KES {Number(e.amount).toLocaleString()}
-                        </td>
-                        <td style={{ fontWeight: "700" }}>KES {Number(e.balance).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <section className="ui-panel savings-panel savings-withdrawals" aria-labelledby="withdrawal-history-title">
+              <div className="ui-panel-header"><div><p className="ui-eyebrow">Payout records</p><h2 className="ui-panel-title" id="withdrawal-history-title">FOSA withdrawal requests</h2></div><Button variant="secondary" size="sm" onClick={loadWithdrawals} loading={withdrawalsLoading}><Icon name="refresh" /> Refresh</Button></div>
+              {withdrawalsLoading ? <LoadingState label="Loading withdrawal history…" /> : withdrawalsError ? null : withdrawals.length === 0 ? <div className="ui-empty"><strong>No withdrawal requests</strong>Your withdrawal requests will appear here.</div> : (
+                <DataTable label="FOSA withdrawal request history"><table className="ui-table"><thead><tr><th>Requested</th><th>Reference</th><th>Destination</th><th>Amount</th><th>Status</th></tr></thead><tbody>{withdrawals.map((row) => <tr key={row.reference}><td>{date(row.created_at)}</td><td>{row.reference}</td><td>{row.destination_type} {row.destination_masked || ""}</td><td className="ui-money">{money(row.amount)}</td><td><StatusBadge status={row.status} /></td></tr>)}</tbody></table></DataTable>
               )}
+            </section>
+          </div>}
+
+          {tab === "statement" && <section className="ui-panel savings-panel" aria-labelledby="savings-statement-title">
+            <div className="ui-panel-header"><h2 className="ui-panel-title" id="savings-statement-title">Savings activity</h2><Button variant="secondary" size="sm" onClick={loadStatement} loading={statementState === "loading"}><Icon name="refresh" /> Refresh</Button></div>
+            {statementState === "loading" && <LoadingState label="Loading savings statement…" />}
+            {statementState === "error" && <div className="ui-panel-body"><FeedbackMessage tone="danger" title="Savings statement could not be loaded" action={<Button variant="secondary" onClick={loadStatement}><Icon name="refresh" /> Retry</Button>}>Please retry. The response could not be read as a valid statement.</FeedbackMessage></div>}
+            {statementState === "success" && (statement.entries.length === 0 ? <div className="ui-empty"><strong>No savings activity recorded</strong>Account activity will appear when there are posted savings entries.</div> : <DataTable label="Savings statement entries"><table className="ui-table"><thead><tr><th>Date</th><th>Account</th><th>Entry</th><th>Amount</th><th>Recorded balance</th></tr></thead><tbody>{statement.entries.map((entry, index) => <tr key={entry.id || `${entry.created_at}-${index}`}><td>{date(entry.created_at || entry.date)}</td><td>{String(entry.account_type || "fosa").toUpperCase()}</td><td>{entry.type || "Activity"}</td><td className="ui-money">{money(entry.amount)}</td><td className="ui-money">{format(entry.balance)}</td></tr>)}</tbody></table></DataTable>)}
+          </section>}
+
+          {tab === "exit" && <section className="ui-panel savings-panel" aria-labelledby="exit-title">
+            <div className="ui-panel-header"><div><p className="ui-eyebrow">Membership</p><h2 className="ui-panel-title" id="exit-title">Membership exit request</h2></div></div>
+            <div className="ui-panel-body savings-form">
+              <p className="ui-muted">A membership exit is reviewed by staff. BOSA funds are not released merely because a request is submitted.</p>
+              {exitLoading && <LoadingState label="Loading your membership request…" />}
+              {exitError && <FeedbackMessage tone="danger" title="Membership request could not be loaded" action={<Button variant="secondary" onClick={loadExit}><Icon name="refresh" /> Retry</Button>}>Try again to check your current request.</FeedbackMessage>}
+              {!exitLoading && !exitError && exitRequest && <div className="savings-exit-status"><p><StatusBadge status={exitRequest.status} label={exitRequest.status_label || exitRequest.status} /></p><dl className="savings-facts"><div><dt>Submitted</dt><dd>{date(exitRequest.created_at)}</dd></div><div><dt>Recorded BOSA balance at request</dt><dd>{format(exitRequest.bosa_balance)}</dd></div><div><dt>Release date</dt><dd>{exitRequest.release_date ? date(exitRequest.release_date) : "Pending review"}</dd></div></dl>{exitRequest.rejection_reason && <FeedbackMessage tone="warning" title="Review outcome">{exitRequest.rejection_reason}</FeedbackMessage>}{["pending", "approved"].includes(exitRequest.status) && <Button variant="secondary" onClick={cancelExit} loading={depositBusy}>Cancel request</Button>}</div>}
+              {!exitLoading && !exitError && !exitRequest && <><FormField label="Reason for leaving (optional)" htmlFor="exit-reason"><textarea id="exit-reason" className="ui-textarea" rows="4" value={exitReason} onChange={(event) => setExitReason(event.target.value)} /></FormField>{depositError && <FeedbackMessage tone="danger">{depositError}</FeedbackMessage>}<Button variant="danger" onClick={submitExit} loading={depositBusy}>Submit exit request</Button></>}
             </div>
-          )}
+          </section>}
 
-          {/* ── EXIT TAB ── */}
-          {tab === "exit" && (
-            <div style={{ maxWidth: "600px" }}>
-              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "12px", padding: "18px 22px", marginBottom: "20px" }}>
-                <h3 style={{ margin: "0 0 8px", fontSize: "15px", fontWeight: "700", color: "#9a3412" }}>⚠️ BOSA Withdrawal — Exit Process</h3>
-                <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "#7c2d12", lineHeight: "1.7" }}>
-                  <li>BOSA savings are <strong>non-withdrawable</strong> while you are an active SACCO member.</li>
-                  <li>To withdraw BOSA funds, you must formally <strong>resign from the SACCO</strong>.</li>
-                  <li>A <strong>60-day holding period</strong> applies after approval (SASRA requirement).</li>
-                  <li>You <strong>cannot exit</strong> if you have an active unpaid loan or are guaranteeing another member's loan.</li>
-                  <li>Current BOSA balance: <strong>KES {bosa.toLocaleString()}</strong></li>
-                </ul>
-              </div>
-
-              {exitReq ? (
-                <div style={{ background: "#fff", borderRadius: "12px", padding: "22px", boxShadow: "var(--shadow)" }}>
-                  <h3 style={{ margin: "0 0 14px", fontSize: "15px", fontWeight: "700" }}>Your Exit Request</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-                    {[
-                      ["Status",        <span style={{ padding: "3px 12px", borderRadius: "20px", fontSize: "13px", fontWeight: "700", background: exitStatusColor[exitReq.status] + "22", color: exitStatusColor[exitReq.status] }}>{exitReq.status_label}</span>],
-                      ["BOSA at Request", `KES ${Number(exitReq.bosa_balance).toLocaleString()}`],
-                      ["Submitted",     new Date(exitReq.created_at).toLocaleDateString("en-KE")],
-                      ["Release Date",  exitReq.release_date ? new Date(exitReq.release_date).toLocaleDateString("en-KE") : "Pending approval"],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{ background: "#f8fafc", borderRadius: "8px", padding: "10px 12px" }}>
-                        <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>{k}</div>
-                        <div style={{ fontWeight: "700", fontSize: "14px" }}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {exitReq.status === "approved" && !exitReq.is_holding_period_over && (
-                    <div style={{ background: "#eff6ff", borderRadius: "8px", padding: "12px 14px", marginBottom: "14px", fontSize: "13px", color: "#1e40af" }}>
-                      ⏳ Your exit is approved. Funds will be available on <strong>{new Date(exitReq.release_date).toLocaleDateString("en-KE")}</strong>.
-                    </div>
-                  )}
-
-                  {exitReq.status === "approved" && exitReq.is_holding_period_over && (
-                    <div style={{ background: "#f0fdf4", borderRadius: "8px", padding: "12px 14px", marginBottom: "14px", fontSize: "13px", color: "#15803d" }}>
-                      ✅ Holding period complete. You can now withdraw your BOSA balance from the Deposit &amp; Withdraw tab.
-                    </div>
-                  )}
-
-                  {exitReq.rejection_reason && (
-                    <div style={{ background: "#fef2f2", borderRadius: "8px", padding: "12px 14px", marginBottom: "14px", fontSize: "13px", color: "#991b1b" }}>
-                      ❌ Rejection reason: {exitReq.rejection_reason}
-                    </div>
-                  )}
-
-                  {["pending", "approved"].includes(exitReq.status) && (
-                    <button onClick={handleCancelExit} style={{ padding: "9px 20px", background: "#fee2e2", color: "#b91c1c", border: "none", borderRadius: "8px", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}>
-                      Cancel Exit Request
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div style={{ background: "#fff", borderRadius: "12px", padding: "22px", boxShadow: "var(--shadow)" }}>
-                  <h3 style={{ margin: "0 0 14px", fontSize: "15px", fontWeight: "700" }}>Submit Exit Request</h3>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#475569", textTransform: "uppercase", marginBottom: "5px" }}>
-                    Reason for Leaving (optional)
-                  </label>
-                  <textarea
-                    className="amount-input"
-                    style={{ width: "100%", minHeight: "80px", resize: "vertical", marginBottom: "14px" }}
-                    placeholder="e.g. Relocating abroad, Financial reasons..."
-                    value={exitReason}
-                    onChange={e => setExitReason(e.target.value)}
-                  />
-                  <button onClick={handleExitRequest} disabled={submittingExit} style={{ padding: "11px 24px", background: "#dc2626", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "14px", cursor: "pointer" }}>
-                    {submittingExit ? "Submitting..." : "🚪 Submit Exit Request"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </>
+          {paymentAmount !== null && <MpesaPayModal paymentType="deposit" amount={paymentAmount} accountType={depositAccount} defaultPhone={user?.phone_number || ""} onClose={() => setPaymentAmount(null)} onConfirmed={() => { setPaymentAmount(null); setDepositAmount(""); loadBalances(); }} />}
+        </div>
       )}
     </Layout>
   );

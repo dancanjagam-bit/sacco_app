@@ -42,21 +42,6 @@ def validate_kenyan_national_id(value: str) -> str:
         raise serializers.ValidationError(
             "Enter a valid Kenyan National ID number (5–8 digits, numbers only)."
         )
-    # Inline structural checks so the serializer blocks obvious fakes immediately
-    # (the full 6-layer check runs again in id_verification.py during registration)
-    n = int(cleaned)
-    if n < 100000:
-        raise serializers.ValidationError(
-            "This National ID number is too short to be a valid Kenyan ID."
-        )
-    if n > 40000000:
-        raise serializers.ValidationError(
-            "National ID exceeds the valid Kenyan range (max 40,000,000)."
-        )
-    if len(set(cleaned)) == 1:
-        raise serializers.ValidationError(
-            "National ID cannot consist of a single repeated digit."
-        )
     return cleaned
 
 
@@ -146,7 +131,6 @@ class RegistrationSerializer(serializers.Serializer):
     id_document_front = serializers.FileField(required=False, allow_null=True)
     id_document_back = serializers.FileField(required=False, allow_null=True)
     id_verification_consent = serializers.BooleanField(required=False, default=False)
-    selfie      = serializers.FileField(required=False, allow_null=True)
 
     # ── Field-level validators ────────────────────────────────────────────
     def validate_username(self, v):
@@ -169,7 +153,9 @@ class RegistrationSerializer(serializers.Serializer):
     def validate_national_id(self, v):
         v = validate_kenyan_national_id(v)
         if Member.objects.filter(national_id=v).exists():
-            raise serializers.ValidationError("National ID already registered.")
+            raise serializers.ValidationError(
+                "We could not complete this registration. Contact member support to resolve an existing record."
+            )
         return v
 
     def validate_phone_number(self, v):
@@ -189,7 +175,7 @@ class RegistrationSerializer(serializers.Serializer):
             return normalise_kenyan_phone(v)
         return v
 
-    def validate_id_document(self, file):
+    def _validate_id_upload(self, file):
         if file:
             from accounts.services.file_validator import validate_id_document
             from django.core.exceptions import ValidationError as DjangoValidationError
@@ -199,37 +185,23 @@ class RegistrationSerializer(serializers.Serializer):
                 raise serializers.ValidationError(exc.messages)
         return file
 
+    def validate_id_document(self, file):
+        return self._validate_id_upload(file)
+
     def validate_id_document_front(self, file):
         return self._validate_id_upload(file)
 
     def validate_id_document_back(self, file):
         return self._validate_id_upload(file)
 
-    @staticmethod
-    def _validate_id_upload(file):
-        if file:
-            from accounts.services.file_validator import validate_id_document
-            from django.core.exceptions import ValidationError as DjangoValidationError
-            try: validate_id_document(file)
-            except DjangoValidationError as exc: raise serializers.ValidationError(exc.messages)
-        return file
-
-    def validate_selfie(self, file):
-        if file:
-            from accounts.services.file_validator import validate_selfie
-            from django.core.exceptions import ValidationError as DjangoValidationError
-            try:
-                validate_selfie(file)
-            except DjangoValidationError as exc:
-                raise serializers.ValidationError(exc.messages)
-        return file
-
     # ── Cross-field ───────────────────────────────────────────────────────
     def validate(self, attrs):
-        if (attrs.get("id_document") or attrs.get("id_document_front") or attrs.get("id_document_back")) and not attrs.get("id_verification_consent"):
-            raise serializers.ValidationError({"id_verification_consent":"Consent is required when submitting identity documents."})
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        if any(attrs.get(name) for name in ("id_document", "id_document_front", "id_document_back")) and not attrs.get("id_verification_consent"):
+            raise serializers.ValidationError({
+                "id_verification_consent": "Consent is required to store identity documents for membership review."
+            })
         return attrs
 
 

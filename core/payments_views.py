@@ -19,8 +19,9 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
-from django.db import transaction as db_transaction
+from django.db import IntegrityError, transaction as db_transaction
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.decorators import api_view, permission_classes
@@ -228,12 +229,12 @@ def payment_status(request, checkout_request_id: str):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @db_transaction.atomic
-def mpesa_callback(request, payment_type: str = ""):
+def mpesa_callback(request, payment_type: str = "", attempt_id=None, signature=None):
     """
     Receive and process the Daraja STK push callback.
 
-    Daraja guarantees at-least-once delivery — we guard against duplicates
-    using the unique constraint on checkout_request_id + mpesa_receipt.
+    Transport attempts are correlated before entering the legacy member flow.
+    Stored checkout IDs and provider receipts guard against replays.
 
     On success:
       - Updates MpesaTransaction.status = "confirmed"
@@ -249,6 +250,19 @@ def mpesa_callback(request, payment_type: str = ""):
         # Always return 200 to Daraja — otherwise it retries indefinitely
         return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
 
+    from .services.transport_payments import record_stk_callback
+
+    if attempt_id is not None:
+        record_stk_callback(parsed, request.data, payment_id=attempt_id, signature=signature)
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+    transport_provider = MpesaTransaction.objects.filter(
+        checkout_request_id=parsed["checkout_request_id"], payment_type="transport_remittance",
+    ).first()
+    if transport_provider:
+        record_stk_callback(parsed, request.data, provider=transport_provider)
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
+
     checkout_id = parsed["checkout_request_id"]
 
     try:
@@ -258,6 +272,10 @@ def mpesa_callback(request, payment_type: str = ""):
     except MpesaTransaction.DoesNotExist:
         logger.warning("Callback for unknown CheckoutRequestID: %s", checkout_id)
         return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
+    if mpesa_txn.payment_type == "transport_remittance":
+        # Transport callback processing owns the payment lock order. A provider
+        # link created since the initial lookup is handled on a provider retry.
+        return Response({"ResultCode": 1, "ResultDesc": "Retry callback"}, status=503)
 
     # Idempotency — ignore duplicate callbacks for already-processed payments
     if mpesa_txn.status != "pending":
@@ -309,8 +327,9 @@ def mpesa_callback(request, payment_type: str = ""):
     receipt = parsed["mpesa_receipt"] or ""
 
     # Guard against duplicate receipts (Daraja retries can carry the same code)
-    if receipt and MpesaTransaction.objects.filter(mpesa_receipt=receipt).exclude(id=mpesa_txn.id).exists():
-        logger.warning("Duplicate M-Pesa receipt %s — ignoring callback", receipt)
+    prior_mpesa = MpesaTransaction.objects.filter(mpesa_receipt=receipt).exclude(id=mpesa_txn.id).first() if receipt else None
+    if prior_mpesa or TransportPayment.objects.filter(mpesa_receipt__iexact=receipt).exists():
+        logger.warning("Duplicate M-Pesa receipt ignored for checkout request")
         return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
 
     user    = mpesa_txn.user
@@ -360,7 +379,6 @@ def mpesa_callback(request, payment_type: str = ""):
             elif ptype == "repayment":
                 loan = mpesa_txn.loan
                 if loan:
-                    from decimal import Decimal
                     paid = Decimal(str(amount))
                     loan.balance = max(Decimal("0.00"), loan.balance - paid)
                     if loan.balance == 0:
@@ -379,18 +397,6 @@ def mpesa_callback(request, payment_type: str = ""):
                         f"Remaining balance: KES {loan.balance:,}. "
                         f"M-Pesa ref: {receipt}.",
                     )
-
-            elif ptype == "transport_remittance":
-                payment=TransportPayment.objects.select_for_update().get(mpesa_transaction=mpesa_txn)
-                if payment.status != "confirmed":
-                    payment.status="confirmed"; payment.mpesa_receipt=receipt
-                    payment.confirmed_at=timezone.now(); payment.unallocated_amount=amount
-                    payment.save(update_fields=["status","mpesa_receipt","confirmed_at","unallocated_amount"])
-                    if payment.remittance:
-                        from .transport_views import _refresh_remittance_status
-                        _refresh_remittance_status(payment.remittance)
-                    AuditLog.log(None,"other",f"Transport payment #{payment.id}",
-                        {"event":"provider_confirmed","amount":str(amount),"receipt":receipt})
 
             # Update the MpesaTransaction record
             mpesa_txn.status       = "confirmed"
@@ -449,7 +455,7 @@ def c2b_validation(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @db_transaction.atomic
-def c2b_confirmation(request):
+def c2b_confirmation(request, callback_token=None):
     """
     Safaricom calls this AFTER money is successfully received.
 
@@ -464,7 +470,7 @@ def c2b_confirmation(request):
         FirstName / LastName: payer name from M-Pesa
     """
     data = request.data
-    logger.info("C2B confirmation received: %s", data)
+    logger.info("C2B confirmation received")
 
     receipt     = data.get("TransID", "")
     amount_raw  = data.get("TransAmount", "0")
@@ -475,31 +481,25 @@ def c2b_confirmation(request):
 
     # Transport Paybill references are generated per persisted remittance.
     # A phone number is retained only as supporting payment information.
-    if receipt and TransportPayment.objects.filter(mpesa_receipt=receipt).exists():
-        return Response({"ResultCode":0,"ResultDesc":"Accepted"})
+    remittance=TransportRemittance.objects.filter(payment_reference=bill_ref).first()
+    is_transport_reference = bool(remittance or bill_ref.startswith("TR"))
+    if is_transport_reference:
+        from .services.transport_payments import record_c2b_receipt
+
+        expected_token = getattr(settings, "TRANSPORT_C2B_CALLBACK_TOKEN", "")
+        if expected_token or getattr(settings, "MPESA_ENV", "") == "production":
+            if not expected_token or not constant_time_compare(expected_token, callback_token or ""):
+                return Response({"ResultCode": 1, "ResultDesc": "Unrecognized callback"}, status=403)
+        if getattr(settings, "MPESA_ENV", "") == "production" and str(data.get("BusinessShortCode", "")) != str(settings.MPESA_SHORTCODE):
+            return Response({"ResultCode": 1, "ResultDesc": "Unrecognized callback"}, status=403)
+        record_c2b_receipt(data, bill_ref, remittance)
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
     try:
         amount = Decimal(str(amount_raw))
-        if not amount.is_finite() or amount <= 0: raise ValueError
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError
     except (ValueError, InvalidOperation):
-        return Response({"ResultCode":0,"ResultDesc":"Accepted"})
-    remittance=TransportRemittance.objects.filter(payment_reference=bill_ref).first()
-    if remittance or bill_ref.startswith("TR"):
-        try:
-            with db_transaction.atomic():
-                payment=TransportPayment.objects.create(remittance=remittance,payer=None,method="c2b",
-                    status="confirmed" if remittance else "unmatched",amount=amount,payer_phone=phone_raw,
-                    provider_reference=bill_ref,mpesa_receipt=receipt or None,
-                    unallocated_amount=amount if remittance else Decimal("0.00"))
-                if remittance:
-                    from .transport_views import _refresh_remittance_status
-                    _refresh_remittance_status(remittance)
-                AuditLog.log(None,"other",f"Transport payment #{payment.id}",
-                    {"event":"c2b_received" if remittance else "c2b_unmatched","amount":str(amount),"reference":bill_ref})
-        except Exception:
-            # C2B callbacks are acknowledged to avoid provider retries creating
-            # duplicate posting; staff can inspect unmatched/error references.
-            logger.exception("Transport C2B callback could not be recorded")
-        return Response({"ResultCode":0,"ResultDesc":"Accepted"})
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
 
     # ── Determine account type from bill ref ─────────────────────────────────
     # Format: SACCO000001       → BOSA deposit (default)
@@ -516,7 +516,8 @@ def c2b_confirmation(request):
         account_type  = "bosa"   # default paybill deposits go to BOSA
 
     # ── Guard against duplicate receipts ─────────────────────────────────────
-    if receipt and Transaction.objects.filter(note__icontains=receipt).exists():
+    if receipt and (Transaction.objects.filter(note__icontains=receipt).exists()
+                    or TransportPayment.objects.filter(mpesa_receipt__iexact=receipt).exists()):
         logger.warning("Duplicate C2B receipt ignored: %s", receipt)
         return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
 

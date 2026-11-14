@@ -10,11 +10,7 @@
     border-radius: 15px;
     padding: 25px;
     box-shadow: 0 4px 15px rgba(0,0,0,.08);
-    transition: .25s;
-}
-
-.summary-card:hover {
-    transform: translateY(-4px);
+    transition: none;
 }
 
 .summary-card h4 {

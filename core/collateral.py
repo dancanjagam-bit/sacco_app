@@ -19,7 +19,7 @@ from django.db.models import Sum, F, Q
 from django.utils import timezone
 from .models import (
     Savings, Loan, LoanGuarantor, AssetCollateral, SACCOSettings,
-    ExitRequest,
+    ExitRequest, FosaWithdrawal,
 )
 
 
@@ -130,7 +130,10 @@ def get_withdrawable_balance(user) -> dict:
     # (Guarantor pledges lock BOSA first, then FOSA if BOSA is insufficient)
     fosa_locked = max(locked_guar - max(locked_own, Decimal("0")), Decimal("0"))
     fosa_locked = min(fosa_locked, fosa_balance)
-    fosa_withdrawable = max(fosa_balance - fosa_locked, Decimal("0"))
+    payout_holds = FosaWithdrawal.objects.filter(
+        user=user, status__in=("requested", "pending", "uncertain"),
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    fosa_withdrawable = max(fosa_balance - fosa_locked - payout_holds, Decimal("0"))
 
     # BOSA is never withdrawable through normal withdrawal
     bosa_withdrawable = Decimal("0")
@@ -152,6 +155,8 @@ def get_withdrawable_balance(user) -> dict:
         "locked_guarantor":  float(locked_guar),
         "total_locked":       float(total_locked),
         "fosa_withdrawable":  float(fosa_withdrawable),
+        "fosa_withdrawals_pending": float(payout_holds),
+        "fosa_collateral_locked": float(fosa_locked),
         "bosa_withdrawable":  float(bosa_withdrawable),
         "withdrawable":       float(total_withdrawable),
         "bosa_locked":        float(min(locked_own, bosa_balance)),

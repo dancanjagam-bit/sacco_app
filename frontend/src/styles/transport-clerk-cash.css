@@ -1,0 +1,13 @@
+.transport-clerk-cash-page { display: grid; gap: var(--space-4); width: 100%; max-width: 70rem; min-width: 0; margin-inline: auto; }
+.transport-clerk-cash-card { display: grid; gap: var(--space-4); min-width: 0; padding: var(--space-5); }
+.transport-clerk-cash-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; min-width: 0; }
+.transport-clerk-cash-head h2 { margin: 0; color: var(--text); font-size: 18px; overflow-wrap: anywhere; }
+.transport-clerk-cash-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.transport-clerk-cash-facts > div { display: grid; gap: 4px; min-width: 0; padding-top: 9px; border-top: 1px solid var(--border); }
+.transport-clerk-cash-facts dt { color: var(--text-muted); font-size: 14px; }
+.transport-clerk-cash-facts dd { margin: 0; color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
+.transport-clerk-cash-note { margin: 0; padding: 12px; color: var(--warning-text); background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: var(--radius); line-height: 1.5; }
+.transport-clerk-cash-form { display: grid; gap: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.transport-clerk-cash-form > p { margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+.transport-clerk-cash-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 520px) { .transport-clerk-cash-card { padding: var(--space-4); } .transport-clerk-cash-facts { grid-template-columns: minmax(0, 1fr); } .transport-clerk-cash-actions > .ui-button { flex: 1 1 auto; } }

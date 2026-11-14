@@ -1,0 +1,375 @@
+/* ── Welfare module styles ────────────────────────────────────────────────── */
+.welfare-page {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 1100px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.welfare-policy-category {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.welfare-policy-category .ui-button { grid-column: 1 / -1; justify-self: start; }
+.welfare-activate-policy { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.welfare-treasury-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.welfare-attribution-form { display: grid; gap: 12px; max-width: 720px; }
+.welfare-attribution-form > .ui-button { justify-self: start; }
+
+/* ── Metrics ── */
+.welfare-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+/* ── Policy info ── */
+.welfare-policy-info { min-width: 0; }
+.welfare-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.welfare-category-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.welfare-category-name {
+  margin: 0 0 8px;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+.welfare-category-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+}
+.welfare-category-facts dt { font-size: 0.8rem; color: var(--text-muted); }
+.welfare-category-facts dd { margin: 0; font-weight: 650; font-size: 0.9rem; }
+
+/* ── Form ── */
+.welfare-form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.welfare-form .ui-button { justify-self: start; }
+
+/* ── Tabs ── */
+.welfare-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.welfare-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.welfare-tab:hover {
+  border-color: var(--brand);
+  color: var(--text);
+}
+.welfare-tab.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+/* ── Filter bar (officer) ── */
+.welfare-filter-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Request card (member) ── */
+.welfare-request {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.welfare-request p,
+.welfare-request h3,
+.welfare-request dl { margin: 0; overflow-wrap: anywhere; }
+.welfare-request-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.welfare-request-heading h3 {
+  text-transform: capitalize;
+  font-size: 1.1rem;
+}
+.welfare-request-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+}
+.welfare-request-facts dt { color: var(--text-muted); font-size: 0.8rem; }
+.welfare-request-facts dd { margin: 2px 0 0; font-weight: 650; }
+.welfare-request-description {
+  color: var(--text-secondary, var(--text));
+  line-height: 1.5;
+}
+.welfare-request-decision {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-2);
+  font-size: 0.9rem;
+}
+.welfare-request-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.welfare-upload-inline {
+  display: grid;
+  gap: 4px;
+}
+.welfare-upload-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── Review notes (info request from officer) ── */
+.welfare-review-notes {
+  padding: 12px 14px;
+  border: 1px solid var(--warning, #f59e0b);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--warning, #f59e0b) 8%, transparent);
+}
+.welfare-review-notes-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 650;
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+.welfare-review-by {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+/* ── Documents ── */
+.welfare-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.welfare-documents li { min-width: 0; }
+.welfare-documents .ui-button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* ── Officer two-column layout ── */
+.welfare-officer-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  min-height: 400px;
+}
+.welfare-officer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── Case card (officer list) ── */
+.welfare-case-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+  font-size: inherit;
+}
+.welfare-case-card:hover {
+  border-color: var(--brand);
+}
+.welfare-case-card.is-selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+.welfare-case-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.welfare-case-category {
+  font-weight: 650;
+  text-transform: capitalize;
+}
+.welfare-case-member {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.welfare-case-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+.welfare-case-facts dt { font-size: 0.75rem; color: var(--text-muted); }
+.welfare-case-facts dd { margin: 0; font-size: 0.85rem; font-weight: 650; }
+
+/* ── Detail panel ── */
+.welfare-officer-detail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  padding: 20px;
+  min-width: 0;
+  overflow-y: auto;
+}
+.welfare-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  gap: 8px;
+}
+.welfare-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.welfare-detail-header h2 {
+  margin: 0;
+  text-transform: capitalize;
+}
+.welfare-detail-member {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.welfare-detail-section {
+  margin-top: 16px;
+}
+.welfare-detail-section h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.welfare-detail-section p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Actions ── */
+.welfare-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.welfare-actions h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.welfare-action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.welfare-action-form {
+  display: grid;
+  gap: 10px;
+}
+
+/* ── Payout status ── */
+.welfare-payout-status {
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-2);
+}
+.welfare-payout-status h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.welfare-payout-ref {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ── Audit note ── */
+.welfare-audit-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Refresh button ── */
+.welfare-refresh {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .welfare-officer-layout {
+    grid-template-columns: 1fr;
+  }
+  .welfare-officer-list {
+    max-height: 50vh;
+  }
+}
+@media (max-width: 520px) {
+  .welfare-form .ui-button { width: 100%; }
+  .welfare-metrics { grid-template-columns: 1fr; }
+}

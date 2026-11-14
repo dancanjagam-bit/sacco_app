@@ -1,56 +1,49 @@
 import React from "react";
-import "../styles/cards.css";
+import MetricCard from "./ui/MetricCard";
+
+function amount(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "Unavailable";
+  return `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function count(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "Unavailable";
+  return Number(value).toLocaleString("en-KE");
+}
 
 function DashboardCards({ data }) {
   const cards = [
     {
-      title: "Total Savings",
-      value: `KES ${Number(data.total_savings || 0).toLocaleString()}`,
-      icon: "💰",
-      color: "#22c55e",
+      label: "Total savings recorded",
+      value: amount(data?.total_savings),
+      helper: "Recorded savings entries",
+      icon: "coins",
     },
     {
-      title: "Total Loans",
-      value: data.total_loans,
-      icon: "🏦",
-      color: "#2563eb",
+      label: "Total loans",
+      value: count(data?.total_loans),
+      helper: "Loan records in the response",
+      icon: "bank",
     },
     {
-      title: "Pending Loans",
-      value: data.pending_loans,
-      icon: "⏳",
-      color: "#f59e0b",
+      label: "Pending loans",
+      value: count(data?.pending_loans),
+      helper: "Awaiting a recorded decision",
+      icon: "clock",
+      tone: "amber",
     },
     {
-      title: "Approved Loans",
-      value: data.approved_loans,
-      icon: "✅",
-      color: "#8b5cf6",
+      label: "Approved loans",
+      value: count(data?.approved_loans),
+      helper: "Approval does not confirm disbursement",
+      icon: "file",
     },
   ];
 
   return (
-    <div className="cards-grid">
-      {cards.map((card, index) => (
-        <div
-          key={index}
-          className="dashboard-card"
-          style={{
-            borderLeft: `6px solid ${card.color}`,
-          }}
-        >
-          <div className="card-icon">
-            {card.icon}
-          </div>
-
-          <h4 className="card-title">
-            {card.title}
-          </h4>
-
-          <h2 className="card-value">
-            {card.value}
-          </h2>
-        </div>
+    <div className="bento-grid staff-kpi-grid">
+      {cards.map((card) => (
+        <MetricCard key={card.label} {...card} />
       ))}
     </div>
   );

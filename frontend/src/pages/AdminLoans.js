@@ -3,6 +3,13 @@ import Layout from "../components/Layout";
 import api from "../api/axios";
 import "../styles/dashboard.css";
 
+const APPRAISAL_OUTCOMES = [
+  ["submitted_for_review", "Submitted for review"],
+  ["recommend_approve", "Recommend approval"],
+  ["recommend_reject", "Recommend rejection"],
+  ["needs_more_information", "Needs more information"],
+];
+
 function AdminLoans() {
   const [loans,    setLoans]    = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -13,6 +20,17 @@ function AdminLoans() {
   const [modal,    setModal]    = useState(null);   // { type: "approve"|"reject", loan }
   const [remarks,  setRemarks]  = useState("");
   const [actioning,setActioning]= useState(false);
+  const [guarantorLoan, setGuarantorLoan] = useState(null);
+  const [guarantors, setGuarantors] = useState(null);
+  const [guarantorLoading, setGuarantorLoading] = useState(false);
+  const [guarantorError, setGuarantorError] = useState("");
+
+  // Appraisal state
+  const [appraisalLoan, setAppraisalLoan] = useState(null);
+  const [appraisalForm, setAppraisalForm] = useState({ outcome: "submitted_for_review", decision_reason: "", reasons: [] });
+  const [appraisalSaving, setAppraisalSaving] = useState(false);
+  const [appraisalError, setAppraisalError] = useState("");
+  const [appraisalSuccess, setAppraisalSuccess] = useState("");
 
   useEffect(() => { fetchLoans(); }, []);
 
@@ -36,6 +54,22 @@ function AdminLoans() {
 
   const closeModal = () => { setModal(null); setRemarks(""); };
 
+  const loadGuarantors = async (loan) => {
+    setGuarantorLoan(loan);
+    setGuarantors(null);
+    setGuarantorError("");
+    setGuarantorLoading(true);
+    try {
+      const response = await api.get(`admin/loan/${loan.id}/guarantors/`);
+      if (!Array.isArray(response.data)) throw new Error("Invalid response");
+      setGuarantors(response.data);
+    } catch (requestError) {
+      setGuarantorError(requestError.response?.data?.detail || "Assigned guarantor details could not be loaded.");
+    } finally {
+      setGuarantorLoading(false);
+    }
+  };
+
   const handleAction = async () => {
     if (!modal) return;
     setActioning(true);
@@ -51,6 +85,31 @@ function AdminLoans() {
       alert(err.response?.data?.error || "Action failed.");
     } finally {
       setActioning(false);
+    }
+  };
+
+  const openAppraisal = (loan) => {
+    setAppraisalLoan(loan);
+    setAppraisalForm({ outcome: "submitted_for_review", decision_reason: "", reasons: [] });
+    setAppraisalError("");
+    setAppraisalSuccess("");
+  };
+
+  const submitAppraisal = async (e) => {
+    e.preventDefault();
+    if (!appraisalLoan) return;
+    setAppraisalSaving(true);
+    setAppraisalError("");
+    setAppraisalSuccess("");
+    try {
+      await api.post(`admin/loan/${appraisalLoan.id}/appraise/`, appraisalForm);
+      setAppraisalSuccess("Appraisal recorded successfully.");
+      setAppraisalLoan(null);
+      fetchLoans();
+    } catch (err) {
+      setAppraisalError(err.response?.data?.detail || "Appraisal could not be saved.");
+    } finally {
+      setAppraisalSaving(false);
     }
   };
 
@@ -82,7 +141,8 @@ function AdminLoans() {
       {() => (
         <>
           <h2 className="section-title">Loan Management</h2>
-          <p className="section-subtitle">Review and action member loan applications</p>
+          <p className="section-subtitle">Only loans assigned to your credit review or decision duty are shown.</p>
+          {loans.some((loan) => loan.can_appraise) && !loans.some((loan) => loan.can_decide) && <div className="alert alert-info" role="status">Your assignment permits appraisal review. A structured appraisal worksheet is not available yet, and appraisal does not approve or disburse a loan.</div>}
 
           {/* Summary */}
           <div className="summary-grid" style={{ marginBottom: "20px" }}>
@@ -129,7 +189,63 @@ function AdminLoans() {
           {loading && <p style={{ color: "#94a3b8" }}>Loading loans...</p>}
 
           {!loading && (
-            <div style={{ overflowX: "auto" }}>
+            <>
+            {guarantorLoan && <section className="ui-panel" aria-labelledby="assigned-guarantors-title" style={{ marginBottom: 16 }}>
+              <div className="ui-panel-header">
+                <div><h3 id="assigned-guarantors-title">Guarantors for loan #{guarantorLoan.id}</h3><p>Visible only for your assigned appraisal.</p></div>
+                <button type="button" onClick={() => { setGuarantorLoan(null); setGuarantors(null); setGuarantorError(""); }}>Close</button>
+              </div>
+              {guarantorLoading && <p role="status">Loading guarantor review…</p>}
+              {guarantorError && <div className="alert alert-error" role="alert">{guarantorError}<button type="button" onClick={() => loadGuarantors(guarantorLoan)}>Retry</button></div>}
+              {guarantors && (guarantors.length ? <ul aria-label="Assigned guarantors">
+                {guarantors.map((entry) => <li key={entry.id}>{entry.guarantor_name} · {entry.member_number || "Member number unavailable"} · {entry.status}{entry.message ? ` · ${entry.message}` : ""}</li>)}
+              </ul> : <p>No guarantor requests are recorded for this loan.</p>)}
+            </section>}
+
+            {/* Appraisal form */}
+            {appraisalLoan && (
+              <section className="ui-panel" aria-labelledby="appraisal-form-title" style={{ marginBottom: 16 }}>
+                <div className="ui-panel-header">
+                  <div><h3 id="appraisal-form-title">Record appraisal — Loan #{appraisalLoan.id}</h3><p>This records your credit officer opinion. It does not approve or disburse the loan.</p></div>
+                  <button type="button" onClick={() => { setAppraisalLoan(null); setAppraisalError(""); setAppraisalSuccess(""); }}>Close</button>
+                </div>
+                <form onSubmit={submitAppraisal} style={{ padding: "16px", display: "grid", gap: "12px", maxWidth: 480 }}>
+                  {appraisalError && <div className="alert alert-error" role="alert">{appraisalError}</div>}
+                  {appraisalSuccess && <div className="alert" style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", borderRadius: 8, padding: "10px 14px" }} role="status">{appraisalSuccess}</div>}
+                  <div>
+                    <label htmlFor="appraisal-outcome" style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Outcome</label>
+                    <select
+                      id="appraisal-outcome"
+                      className="ui-select"
+                      value={appraisalForm.outcome}
+                      onChange={(e) => setAppraisalForm({ ...appraisalForm, outcome: e.target.value })}
+                      required
+                    >
+                      {APPRAISAL_OUTCOMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="appraisal-reason" style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Decision reason</label>
+                    <textarea
+                      id="appraisal-reason"
+                      className="ui-textarea"
+                      rows="3"
+                      maxLength="1000"
+                      value={appraisalForm.decision_reason}
+                      onChange={(e) => setAppraisalForm({ ...appraisalForm, decision_reason: e.target.value })}
+                      placeholder="Summarise your credit assessment findings"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={appraisalSaving}
+                    style={{ padding: "10px 20px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                  >
+                    {appraisalSaving ? "Saving…" : "Save appraisal"}
+                  </button>
+                </form>
+              </section>
+            )}            <div style={{ overflowX: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
@@ -185,7 +301,7 @@ function AdminLoans() {
                           {new Date(loan.created_at).toLocaleDateString()}
                         </td>
                         <td>
-                          {loan.status === "pending" ? (
+                          {loan.status === "pending" && loan.can_decide ? (
                             <div className="loan-actions">
                               <button className="approve-btn" onClick={() => openModal("approve", loan)}>
                                 ✅ Approve
@@ -194,7 +310,9 @@ function AdminLoans() {
                                 ❌ Reject
                               </button>
                             </div>
-                          ) : "—"}
+                          ) : loan.can_appraise ? <span className="status status-pending">Appraisal assigned · decision not authorized</span> : "—"}
+                          {loan.can_appraise && <button type="button" onClick={() => loadGuarantors(loan)}>Review guarantors</button>}
+                          {loan.can_appraise && <button type="button" style={{ marginLeft: 4 }} onClick={() => openAppraisal(loan)}>📝 Record appraisal</button>}
                         </td>
                       </tr>
                     ))
@@ -202,6 +320,7 @@ function AdminLoans() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {/* ── Action modal ── */}

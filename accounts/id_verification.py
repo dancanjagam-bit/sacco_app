@@ -141,13 +141,58 @@ def _check_dob_plausibility(dob_str: str) -> tuple[bool, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LAYER 6 — provider boundary; live integration disabled pending onboarding
+# LAYER 6 — Smile Identity API (only when credentials are configured)
 # ─────────────────────────────────────────────────────────────────────────────
 def _call_smile_identity(national_id: str, first_name: str, last_name: str) -> dict:
-    # Do not send National IDs to a guessed URL or rely on guessed response
-    # fields. The approved provider contract and partner onboarding are absent.
-    return {"success": None, "status": "provider_unavailable",
-            "message": "Live identity provider onboarding is required.", "provider": "sandbox"}
+    api_key    = getattr(settings, "SMILE_IDENTITY_API_KEY", "")
+    partner_id = getattr(settings, "SMILE_IDENTITY_PARTNER_ID", "")
+
+    if not api_key or not partner_id:
+        logger.info("Smile Identity is not configured; provider check was not attempted")
+        return {"success": None, "status": "not_configured",
+                "message": "ID queued for manual staff review.", "provider": "smile_identity"}
+
+    try:
+        import requests, hashlib, time
+        timestamp = str(int(time.time()))
+        signature = hashlib.md5(f"{timestamp}{partner_id}{api_key}".encode()).hexdigest()
+
+        resp = requests.post(
+            "https://testapi.smileidentity.com/v1/id_verification",
+            json={
+                "partner_id": partner_id, "timestamp": timestamp,
+                "sec_key": signature, "country": "KE",
+                "id_type": "NATIONAL_ID", "id_number": national_id,
+                "first_name": first_name, "last_name": last_name,
+            },
+            timeout=10,
+        )
+
+        if resp.status_code == 200:
+            data = resp.json()
+            verified = (
+                data.get("ResultCode") in ("1012", "1013")
+                and data.get("Actions", {}).get("Verify_ID_Number") == "Verified"
+            )
+            return {
+                "success":   verified,
+                "status":    "verified" if verified else "failed",
+                "full_name": data.get("FullName", ""),
+                "dob":       data.get("DOB", ""),
+                "message":   data.get("ResultText", ""),
+                "provider":  "smile_identity",
+                "raw":       data,
+            }
+
+        return {"success": None, "status": "api_error",
+                "message": f"KYC service returned {resp.status_code}. ID queued for review.",
+                "provider": "smile_identity"}
+
+    except Exception as exc:
+        logger.error("Smile Identity call failed: %s", exc)
+        return {"success": None, "status": "api_error",
+                "message": "KYC service unavailable. ID queued for manual review.",
+                "provider": "smile_identity"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

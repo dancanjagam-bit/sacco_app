@@ -14,13 +14,20 @@ export default function AdminArrears() {
   const showToast = useToast();
   const [data,     setData]     = useState(null);
   const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState("");
   const [bucket,   setBucket]   = useState("all");
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
     api.get("admin/arrears/")
-      .then(r => setData(r.data))
-      .catch(() => showToast("Failed to load arrears report.", "error"))
-      .finally(() => setLoading(false));
+      .then(r => { setData(r.data); setLoading(false); })
+      .catch((err) => {
+        const msg = err.response?.data?.detail || "Failed to load arrears report.";
+        setError(msg);
+        showToast(msg, "error");
+        setLoading(false);
+      });
   }, [showToast]);
 
   const loans = (data?.loans || []).filter(l => bucket === "all" || l.bucket === bucket);
@@ -40,6 +47,8 @@ export default function AdminArrears() {
 
           {loading ? (
             <p style={{ color: "#94a3b8" }}>Loading arrears report…</p>
+          ) : error ? (
+            <div className="alert alert-warning">{error}</div>
           ) : !data ? null : (
             <>
               {/* Summary cards */}

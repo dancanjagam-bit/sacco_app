@@ -1,22 +1,43 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/",
-});
+const configuredApiUrl = process.env.REACT_APP_API_URL?.trim();
+const apiBaseUrl = configuredApiUrl
+  ? `${configuredApiUrl.replace(/\/+$/, "")}/`
+  : "/api/";
 
-// ── Request interceptor: attach access token ──────────────────────────────
+const api = axios.create({ baseURL: apiBaseUrl });
+
+// A separate plain instance for auth endpoints — no interceptors, no token injection
+export const authApi = axios.create({ baseURL: apiBaseUrl });
+
+function readToken(key) {
+  return sessionStorage.getItem(key) || localStorage.getItem(key);
+}
+
+function writeToken(key, value) {
+  localStorage.removeItem(key);
+  sessionStorage.removeItem(key);
+  if (value) {
+    const storage = localStorage.getItem("sacco_remember_session") === "true" ? localStorage : sessionStorage;
+    storage.setItem(key, value);
+  }
+}
+
+// Request interceptor: attach access token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access");
+  const token = readToken("access");
 
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (config.headers) {
+    delete config.headers.Authorization;
   }
 
   return config;
 });
 
-// ── Response interceptor: auto-refresh on 401 ─────────────────────────────
+// Response interceptor: auto-refresh on 401
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -36,22 +57,21 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Only attempt refresh on 401 and only once per request
     if (
       error.response?.status === 401 &&
       !originalRequest._retry
     ) {
-      const refreshToken = localStorage.getItem("refresh");
+      const refreshToken = readToken("refresh");
 
-      // No refresh token — force logout
       if (!refreshToken) {
-        localStorage.clear();
+        writeToken("access", null);
+        writeToken("refresh", null);
         window.location.href = "/";
         return Promise.reject(error);
       }
 
       if (isRefreshing) {
-        // Queue concurrent requests while a refresh is in-flight
+        originalRequest._retry = true;
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -67,21 +87,23 @@ api.interceptors.response.use(
 
       try {
         const res = await axios.post(
-          "http://127.0.0.1:8000/api/token/refresh/",
+          `${apiBaseUrl}token/refresh/`,
           { refresh: refreshToken }
         );
 
         const newAccess = res.data.access;
-        localStorage.setItem("access", newAccess);
+        writeToken("access", newAccess);
+        if (res.data.refresh) writeToken("refresh", res.data.refresh);
 
-        api.defaults.headers.common.Authorization = `Bearer ${newAccess}`;
         originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+        originalRequest._retry = true;
 
         processQueue(null, newAccess);
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.clear();
+        writeToken("access", null);
+        writeToken("refresh", null);
         window.location.href = "/";
         return Promise.reject(refreshError);
       } finally {

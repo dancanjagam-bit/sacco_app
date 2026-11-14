@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-labelledby="title">
+  <title id="title">Nairobi West tuktuk</title>
+  <path d="M19 25 30 9h31l11 16" fill="#0F4C81" stroke="#0F172A" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M24 24h39l8 12H20z" fill="#DBEAFE" stroke="#0F172A" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="m31 13-7 10h18V13zM45 13v10h21l-7-10z" fill="#0F172A"/>
+  <path d="M16 36h54l10 8v7H15z" fill="#0F172A" stroke="#0F172A" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M15 45h63v5H15z" fill="#047857"/>
+  <path d="m70 37 10 7h-9z" fill="#92400E"/>
+  <circle cx="28" cy="52" r="7" fill="#fff" stroke="#0B1437" stroke-width="2"/>
+  <circle cx="68" cy="52" r="7" fill="#fff" stroke="#0B1437" stroke-width="2"/>
+  <circle cx="28" cy="52" r="2.5" fill="#0F4C81"/>
+  <circle cx="68" cy="52" r="2.5" fill="#0F4C81"/>
+</svg>

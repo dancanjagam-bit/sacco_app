@@ -4,193 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import "../styles/dashboard.css";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-/* ── helpers ── */
-const download = (blob, filename) => {
-  const url  = window.URL.createObjectURL(new Blob([blob]));
-  const link = document.createElement("a");
-  link.href  = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-};
-
-/* ── Member Reports ─────────────────────────────────────────────────────── */
-function MemberReports({ user }) {
-  const loans        = user?.loans        || [];
-  const transactions = user?.transactions || [];
-
-  const totalDeposits  = transactions.filter(t => t.type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
-  const totalLoansDis  = transactions.filter(t => t.type === "loan").reduce((s, t) => s + Number(t.amount), 0);
-  const totalRepaid    = transactions.filter(t => t.type === "repayment").reduce((s, t) => s + Number(t.amount), 0);
-  const totalWithdrawn = transactions.filter(t => t.type === "withdrawal").reduce((s, t) => s + Number(t.amount), 0);
-
-  const [dividends,  setDividends]  = useState([]);
-  const [exportingX, setExportingX] = useState(false);
-  const [exportingP, setExportingP] = useState(false);
-  const [scheduleData, setScheduleData] = useState(null);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-
-  useEffect(() => {
-    api.get("dividends/").then(r => setDividends(r.data)).catch(() => {});
-  }, []);
-
-  const activeLoan = loans.find(l => l.status === "approved" && Number(l.balance) > 0);
-
-  const loadSchedule = async (loanId) => {
-    setScheduleLoading(true);
-    try {
-      const res = await api.get(`loan/${loanId}/schedule/`);
-      setScheduleData(res.data);
-    } catch { setScheduleData(null); }
-    finally { setScheduleLoading(false); }
-  };
-
-  const exportExcel = async () => {
-    setExportingX(true);
-    try {
-      const r = await api.get("transactions/excel/", { responseType: "blob" });
-      download(r.data, "sacco_statement.xlsx");
-    } catch { alert("Export failed."); }
-    finally { setExportingX(false); }
-  };
-
-  const exportPDF = async () => {
-    setExportingP(true);
-    try {
-      const r = await api.get("statement/pdf/", { responseType: "blob" });
-      download(r.data, "sacco_statement.pdf");
-    } catch { alert("PDF export failed."); }
-    finally { setExportingP(false); }
-  };
-
-  return (
-    <>
-      <div className="summary-grid">
-        {[
-          ["💰 Current Savings", `KES ${Number(user?.total_savings || 0).toLocaleString()}`, "var(--success)"],
-          ["📥 Total Deposited", `KES ${totalDeposits.toLocaleString()}`, "var(--primary)"],
-          ["📤 Total Withdrawn", `KES ${totalWithdrawn.toLocaleString()}`, "var(--warning)"],
-          ["🏦 Loans Received",  `KES ${totalLoansDis.toLocaleString()}`,  "var(--purple)"],
-          ["🔄 Total Repaid",    `KES ${totalRepaid.toLocaleString()}`,    "var(--info)"],
-        ].map(([h, v, c]) => (
-          <div key={h} className="summary-card" style={{ borderTopColor: c }}>
-            <h4>{h}</h4><h2>{v}</h2>
-          </div>
-        ))}
-      </div>
-
-      {/* Active loan */}
-      {activeLoan && (
-        <>
-          <h3 style={{ margin: "24px 0 12px", fontSize: "16px", fontWeight: "700" }}>Active Loan</h3>
-          <div style={{ background: "#fff", borderRadius: "12px", padding: "20px", boxShadow: "var(--shadow)", marginBottom: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px", marginBottom: "16px" }}>
-              {[
-                ["Principal",      `KES ${Number(activeLoan.amount).toLocaleString()}`],
-                ["Interest",       `${activeLoan.interest}%`],
-                ["Period",         `${activeLoan.repayment_months} months`],
-                ["Outstanding",    `KES ${Number(activeLoan.balance).toLocaleString()}`],
-                ["Monthly",        `KES ${((Number(activeLoan.amount) * (1 + Number(activeLoan.interest)/100)) / activeLoan.repayment_months).toLocaleString(undefined, { maximumFractionDigits: 0 })}`],
-              ].map(([k, v]) => (
-                <div key={k} style={{ background: "#f8fafc", borderRadius: "8px", padding: "12px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".4px" }}>{k}</div>
-                  <div style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", marginTop: "4px" }}>{v}</div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => loadSchedule(activeLoan.id)} style={{ padding: "9px 18px", background: "var(--primary)", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}>
-              📅 View Repayment Schedule
-            </button>
-          </div>
-
-          {scheduleLoading && <p style={{ color: "#94a3b8" }}>Loading schedule...</p>}
-          {scheduleData && (
-            <div style={{ background: "#fff", borderRadius: "12px", boxShadow: "var(--shadow)", marginBottom: "24px", overflowX: "auto" }}>
-              <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", fontWeight: "700" }}>Repayment Schedule — Loan #{scheduleData.loan_id}</div>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>#</th><th>Due Date</th><th>Expected</th><th>Paid</th><th>Paid On</th><th>Balance</th><th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduleData.schedule.map(row => (
-                    <tr key={row.installment}>
-                      <td>{row.installment}</td>
-                      <td>{new Date(row.due_date).toLocaleDateString("en-KE")}</td>
-                      <td>KES {Number(row.expected).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                      <td>KES {Number(row.paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                      <td>{row.paid_on ? new Date(row.paid_on).toLocaleDateString("en-KE") : "—"}</td>
-                      <td>KES {Number(row.balance_after).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                      <td><span className={`status status-${row.status === "paid" ? "approved" : row.status === "overdue" ? "rejected" : row.status === "partial" ? "pending" : "info"}`}>{row.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Loans history */}
-      {loans.length > 0 && (
-        <>
-          <h3 style={{ margin: "24px 0 12px", fontSize: "16px", fontWeight: "700" }}>Loan History</h3>
-          <table className="table" style={{ marginBottom: "24px" }}>
-            <thead><tr><th>ID</th><th>Amount</th><th>Interest</th><th>Period</th><th>Purpose</th><th>Balance</th><th>Status</th></tr></thead>
-            <tbody>
-              {loans.map(l => (
-                <tr key={l.id}>
-                  <td>#{l.id}</td>
-                  <td>KES {Number(l.amount).toLocaleString()}</td>
-                  <td>{l.interest}%</td>
-                  <td>{l.repayment_months} mo.</td>
-                  <td style={{ textTransform: "capitalize" }}>{l.purpose}</td>
-                  <td>KES {Number(l.balance).toLocaleString()}</td>
-                  <td><span className={`status status-${l.status}`}>{l.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Dividends */}
-      {dividends.length > 0 && (
-        <>
-          <h3 style={{ margin: "0 0 12px", fontSize: "16px", fontWeight: "700" }}>💹 Dividend History</h3>
-          <table className="table" style={{ marginBottom: "24px" }}>
-            <thead><tr><th>Year</th><th>Rate</th><th>Balance at Year End</th><th>Dividend Earned</th></tr></thead>
-            <tbody>
-              {dividends.map(d => (
-                <tr key={d.year}>
-                  <td><strong>{d.year}</strong></td>
-                  <td>{d.rate}%</td>
-                  <td>KES {Number(d.balance).toLocaleString()}</td>
-                  <td style={{ color: "#15803d", fontWeight: "700" }}>+ KES {Number(d.dividend).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Downloads */}
-      <h3 style={{ margin: "0 0 12px", fontSize: "16px", fontWeight: "700" }}>📥 Download Statements</h3>
-      <div className="action-buttons">
-        <button onClick={exportExcel} disabled={exportingX}>
-          {exportingX ? "Generating..." : "📊 Excel Statement"}
-        </button>
-        <button onClick={exportPDF} disabled={exportingP} style={{ background: "#dc2626" }}>
-          {exportingP ? "Generating..." : "📄 PDF Statement"}
-        </button>
-      </div>
-    </>
-  );
-}
+import MemberReportsPage from "./MemberReportsPage";
+import PageHeading from "../components/ui/PageHeading";
 
 /* ── Admin Reports ───────────────────────────────────────────────────────── */
 function AdminReports() {
@@ -330,9 +145,6 @@ export default function Reports() {
     <Layout>
       {() => (
         <>
-          <h2 className="section-title">📋 Reports & Statements</h2>
-          <p className="section-subtitle">Financial summary and downloadable statements</p>
-
           {/* Admin tab switcher */}
           {isAdmin && (
             <div style={{ display: "flex", gap: "4px", marginBottom: "20px", background: "#f1f5f9", borderRadius: "10px", padding: "4px", width: "fit-content" }}>
@@ -347,7 +159,10 @@ export default function Reports() {
             </div>
           )}
 
-          {tab === "member" ? <MemberReports user={user} /> : <AdminReports />}
+          {tab === "member" ? <MemberReportsPage user={user} /> : <>
+            <PageHeading eyebrow="Staff reporting" title="SACCO reports" description="Financial summaries for authorized staff." />
+            <AdminReports />
+          </>}
         </>
       )}
     </Layout>

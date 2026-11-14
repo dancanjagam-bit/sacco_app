@@ -3,8 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import "../styles/auth.css";
 import IDDocumentUpload from "../components/IDDocumentUpload";
-import SelfieCapture from "../components/SelfieCapture";
 import VerificationStatusBadge from "../components/VerificationStatusBadge";
+import Icon from "../components/ui/Icon";
 
 const COUNTIES = [
   "Mombasa","Kwale","Kilifi","Tana River","Lamu","Taita-Taveta",
@@ -71,13 +71,20 @@ export default function Register() {
   const [showPw,   setShowPw]   = useState(false);
   const [showConf, setShowConf] = useState(false);
 
-  const [idDocument, setIdDocument] = useState(null);
-  const [selfieFile, setSelfieFile]  = useState(null);
+  const [idDocument, setIdDocumentState] = useState(null);
+  const [idDocumentBack, setIdDocumentBack] = useState(null);
+  const [idVerificationConsent, setIdVerificationConsent] = useState(false);
   const [idStatus,   setIdStatus]    = useState(null);
+  const [registrationResult, setRegistrationResult] = useState(null);
 
   const set = (name) => (e) => {
     setForm(prev => ({ ...prev, [name]: e.target.value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  };
+
+  const setIdDocument = (file) => {
+    setIdDocumentState(file);
+    setErrors(prev => ({ ...prev, id_document_front: null, id_document: null }));
   };
 
   // ── Validation ─────────────────────────────────────────────────────────
@@ -94,7 +101,7 @@ export default function Register() {
       if (age < 18) e.date_of_birth = "You must be at least 18 years old.";
     }
     if (!form.gender) e.gender = "Select a gender.";
-    setErrors(e);
+    setErrors(prev => ({ ...prev, ...e }));
     return Object.keys(e).length === 0;
   };
 
@@ -113,7 +120,7 @@ export default function Register() {
       e.recovery_email = "Enter a valid email.";
     if (form.recovery_phone && !ph.test(form.recovery_phone.replace(/[\s-]/g, "")))
       e.recovery_phone = "Enter a valid Kenyan number.";
-    setErrors(e);
+    setErrors(prev => ({ ...prev, ...e }));
     return Object.keys(e).length === 0;
   };
 
@@ -129,7 +136,7 @@ export default function Register() {
     if (!form.confirm_password) e.confirm_password = "Please confirm your password.";
     else if (form.password !== form.confirm_password)
       e.confirm_password = "Passwords do not match.";
-    setErrors(e);
+    setErrors(prev => ({ ...prev, ...e }));
     return Object.keys(e).length === 0;
   };
 
@@ -147,15 +154,17 @@ export default function Register() {
     try {
       const formData = new FormData();
       Object.entries(form).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") formData.append(k, v); });
-      if (idDocument) formData.append("id_document", idDocument);
-      if (selfieFile)  formData.append("selfie",      selfieFile);
+      if (idDocument) formData.append("id_document_front", idDocument);
+      if (idDocumentBack) formData.append("id_document_back", idDocumentBack);
+      formData.append("id_verification_consent", String(idVerificationConsent));
       const res = await api.post("register/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setIdStatus(res.data.id_status);
+      setRegistrationResult(res.data);
       setMessage({
         type: "success",
-        text: `✅ Registration successful! Your Member Number is ${res.data.member_number}. Redirecting...`,
+        text: `Registration successful. Your Member Number is ${res.data.member_number}. Redirecting…`,
       });
       setTimeout(() => navigate("/"), 3000);
     } catch (err) {
@@ -173,7 +182,7 @@ export default function Register() {
         });
         setErrors(serverErrors);
         const s1 = ["first_name","last_name","email","date_of_birth","gender"];
-        const s2 = ["national_id","phone_number","county","address","recovery_email","recovery_phone"];
+        const s2 = ["national_id","phone_number","county","address","recovery_email","recovery_phone","id_document","id_document_front","id_document_back","id_verification_consent"];
         if (Object.keys(serverErrors).some(f => s1.includes(f))) setStep(1);
         else if (Object.keys(serverErrors).some(f => s2.includes(f))) setStep(2);
         else setStep(3);
@@ -190,7 +199,9 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card" style={{ maxWidth: "540px" }}>
-        <div className="auth-logo">🏦</div>
+        <div className="auth-logo">
+          <img src="/nairobi-west-tuktuk-dark.svg" alt="Nairobi West Transport Cooperative" />
+        </div>
         <h1 className="auth-title">SACCO Registration</h1>
         <p className="auth-subtitle">Create your SACCO member account</p>
 
@@ -223,7 +234,13 @@ export default function Register() {
           </div>
         )}
 
-        <div className="auth-form">
+        {registrationResult ? (
+          <div className="auth-form" aria-live="polite">
+            <p>Your membership application is awaiting staff review. You can sign in to check its status.</p>
+            {idStatus && <p>Identity documents: <VerificationStatusBadge status={idStatus} /></p>}
+            <button type="button" className="auth-button" disabled>Registration complete</button>
+          </div>
+        ) : <div className="auth-form">
 
           {/* ── STEP 1 ── */}
           {step === 1 && (
@@ -320,10 +337,26 @@ export default function Register() {
               </div>
 
               <div style={{ marginTop: "12px" }}>
-                <IDDocumentUpload onChange={setIdDocument} disabled={loading} />
+                <IDDocumentUpload onChange={setIdDocument} selectedFile={idDocument} disabled={loading} error={errors.id_document_front || errors.id_document} />
               </div>
-              <div style={{ marginTop: "12px" }}>
-                <SelfieCapture onChange={setSelfieFile} disabled={loading} />
+              <div style={{ marginTop: "12px" }} className="auth-document-back">
+                <label style={labelStyle()} htmlFor="id-document-back-input">National ID back (optional)</label>
+                <input id="id-document-back-input" type="file" accept="image/jpeg,image/png,image/gif,application/pdf" disabled={loading}
+                  aria-invalid={Boolean(errors.id_document_back)} onChange={e => setIdDocumentBack(e.target.files?.[0] || null)} />
+                {idDocumentBack && <p style={errStyle()}>{idDocumentBack.name} is selected for submission.</p>}
+                {errors.id_document_back && <p style={errStyle()}>{errors.id_document_back}</p>}
+              </div>
+              <label className="auth-kyc-consent">
+                <input type="checkbox" checked={idVerificationConsent} disabled={loading}
+                  aria-invalid={Boolean(errors.id_verification_consent)}
+                  onChange={e => { setIdVerificationConsent(e.target.checked); setErrors(prev => ({ ...prev, id_verification_consent: null })); }} />
+                <span>I authorize secure storage of any identity documents I upload for membership review. OCR is advisory; no government database match, selfie match, or liveness check is performed.</span>
+              </label>
+              {errors.id_verification_consent && <p style={errStyle()}>{errors.id_verification_consent}</p>}
+              <p className="auth-kyc-note">You may continue without documents and submit them later from Identity verification.</p>
+              <div className="auth-kyc-status">
+                <Icon name="shield" size={18} />
+                <span>Membership and identity review are separate. Your account remains pending until staff complete review.</span>
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>
@@ -390,7 +423,7 @@ export default function Register() {
               </div>
             </>
           )}
-        </div>
+        </div>}
 
         <div className="auth-footer">
           Already have an account? <Link to="/">Sign in here</Link>

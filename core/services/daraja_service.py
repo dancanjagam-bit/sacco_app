@@ -222,7 +222,7 @@ def initiate_stk_push(
 
     logger.info(
         "STK push to phone ending %s amount=%s ref=%s tag=%s",
-        safari_phone[-4:], amount, account_ref, callback_tag,
+        safari_phone[-4:], amount, account_ref, callback_tag.split("/")[0],
     )
 
     url = f"{settings.MPESA_BASE_URL}/mpesa/stkpush/v1/processrequest"
@@ -313,12 +313,16 @@ def parse_stk_callback(body: dict) -> dict:
         checkout_id  = stk["CheckoutRequestID"]
         result_code  = int(stk["ResultCode"])
         result_desc  = stk.get("ResultDesc", "")
-    except (KeyError, TypeError, ValueError) as exc:
+        if not isinstance(checkout_id, str) or not checkout_id.strip():
+            raise ValueError("CheckoutRequestID must be a nonempty string")
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise DarajaError(f"Malformed STK callback body: {exc}", raw=body) from exc
 
     result: dict = {
         "success":             result_code == 0,
         "checkout_request_id": checkout_id,
+        "merchant_request_id": stk.get("MerchantRequestID", ""),
+        "merchant_request_id": stk.get("MerchantRequestID"),
         "result_code":         result_code,
         "result_desc":         result_desc,
         "mpesa_receipt":       None,
@@ -329,10 +333,13 @@ def parse_stk_callback(body: dict) -> dict:
 
     if result_code == 0:
         # CallbackMetadata items — indexed by Name
-        items = {
-            item["Name"]: item.get("Value")
-            for item in stk.get("CallbackMetadata", {}).get("Item", [])
-        }
+        try:
+            items = {
+                item["Name"]: item.get("Value")
+                for item in stk.get("CallbackMetadata", {}).get("Item", [])
+            }
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise DarajaError("Malformed STK callback metadata", raw=body) from exc
         result["mpesa_receipt"]    = items.get("MpesaReceiptNumber")
         result["amount"]           = items.get("Amount")
         result["phone"]            = str(items["PhoneNumber"]) if items.get("PhoneNumber") else None

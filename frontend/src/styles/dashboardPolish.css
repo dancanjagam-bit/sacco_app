@@ -1,0 +1,25 @@
+/* Shared page-title polish loaded after legacy page styles to prevent cascade conflicts. */
+.ui-page-heading .section-title {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: var(--text-heading);
+  font-weight: 760;
+  letter-spacing: -.035em;
+  line-height: 1.16;
+}
+.ui-page-heading .section-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ui-page-heading { min-width: 0; }
+.ui-page-heading > div:first-child { min-width: 0; }
+.ui-page-actions { min-width: 0; }
+
+@media (max-width: 700px) {
+  .ui-page-heading { align-items: flex-start; flex-direction: column; }
+  .ui-page-actions { width: 100%; }
+  .ui-page-actions > * { max-width: 100%; }
+}

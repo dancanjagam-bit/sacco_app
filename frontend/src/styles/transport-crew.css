@@ -1,0 +1,43 @@
+.transport-crew-page { display: grid; gap: 16px; width: 100%; max-width: 980px; min-width: 0; margin-inline: auto; }
+.transport-crew-page .ui-page-heading { margin-bottom: 0; }
+.transport-crew-card {
+  min-width: 0; padding: var(--card-padding); color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow-xs);
+}
+.transport-crew-card h2 { margin: 0 0 8px; color: var(--text); font-size: 1.125rem; }
+.transport-crew-card p { margin: 6px 0 12px; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.transport-crew-assignment-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.transport-crew-assignment-title > svg { flex: 0 0 22px; color: var(--brand); }
+.transport-crew-assignment-title > div { flex: 1 1 auto; min-width: 0; }
+.transport-crew-assignment-title h2 { margin: 0; overflow-wrap: anywhere; }
+.transport-crew-assignment-title span { color: var(--text-muted); font-size: var(--text-sm); }
+.transport-crew-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; margin: 18px 0 8px; }
+.transport-crew-facts > div { min-width: 0; padding: 12px; background: var(--surface-muted); border-radius: var(--radius-sm); }
+.transport-crew-facts dt { color: var(--text-muted); font-size: var(--text-sm); }
+.transport-crew-facts dd { margin: 4px 0 0; color: var(--text); font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.transport-crew-note { border-top: 1px solid var(--border); padding-top: 10px; }
+.transport-crew-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-width: 600px; }
+.transport-crew-form label { color: var(--text); font-weight: 600; }
+.transport-crew-form input, .transport-crew-form textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px;
+  color: var(--text); background: var(--surface); border: 1px solid var(--control-border);
+  border-radius: var(--radius-control); font: inherit; font-size: 16px;
+}
+.transport-crew-form textarea { resize: vertical; }
+.transport-crew-form input:focus-visible, .transport-crew-form textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.transport-offline-draft, .transport-remittance { min-width: 0; padding: 12px 0; border-top: 1px solid var(--border); }
+.transport-offline-draft { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.transport-offline-draft p { margin: 0; }
+.transport-crew-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.transport-crew-activity { margin: 8px 0 0; padding-left: 20px; }
+.transport-crew-activity li { padding: 8px 0; overflow-wrap: anywhere; border-bottom: 1px solid var(--border); }
+.transport-crew-page .ui-feedback { min-width: 0; }
+@media (max-width: 480px) {
+  .transport-crew-assignment-title { align-items: flex-start; flex-wrap: wrap; }
+  .transport-crew-assignment-title .ui-status { margin-left: 34px; }
+  .transport-crew-actions > .ui-button, .transport-crew-form > .ui-button { width: 100%; }
+  .transport-offline-draft > .ui-button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transport-crew-page *, .transport-crew-page *::before, .transport-crew-page *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}

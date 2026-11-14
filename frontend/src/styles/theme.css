@@ -1,144 +1,487 @@
-/* ===================================
-   SACCO Premium Theme — v3
-   Midnight Navy × Electric Indigo × Emerald
-=================================== */
+/* =============================================================================
+   Nairobi West Transport Cooperative — Design System Tokens v4
+   Single source of truth for colours, spacing, typography, and motion.
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+   Use a locally provisioned Inter font when present; system fonts are the
+   offline fallback. No remote font request is made by this stylesheet.
+   Dark mode: add  data-theme="dark"  to <html> for explicit override;
+   the media query provides automatic system-preference support.
+   Navigation stays at the TOP on mobile (drawer, not bottom nav).
+   Focus management and permissions are handled in JS, not CSS.
+============================================================================= */
 
+/* ── Primitive palette (read-only scale — do not use directly in components) ── */
 :root {
-  /* ── Brand Palette ── */
-  --indigo-950:   #1e1b4b;
-  --indigo-900:   #312e81;
-  --indigo-800:   #3730a3;
-  --indigo-700:   #4338ca;
-  --indigo-600:   #4f46e5;
-  --indigo-500:   #6366f1;
-  --indigo-400:   #818cf8;
-  --indigo-100:   #e0e7ff;
-  --indigo-50:    #eef2ff;
+  /* Blue / navy */
+  --blue-950:  #0a2444;
+  --blue-900:  #0f3460;
+  --blue-800:  #0f4c81;   /* brand */
+  --blue-700:  #1565a8;
+  --blue-600:  #1d4ed8;
+  --blue-500:  #3b82f6;
+  --blue-400:  #60a5fa;
+  --blue-300:  #93c5fd;
+  --blue-100:  #dbeafe;
+  --blue-50:   #eff6ff;
 
-  --navy-950:     #0b1437;
-  --navy-900:     #0f172a;
-  --navy-800:     #1e293b;
-  --navy-700:     #334155;
-  --navy-600:     #475569;
-  --navy-500:     #64748b;
-  --navy-400:     #94a3b8;
-  --navy-300:     #cbd5e1;
-  --navy-200:     #e2e8f0;
-  --navy-100:     #f1f5f9;
-  --navy-50:      #f8fafc;
+  --navy-950:  #020617;
+  --navy-900:  #0f172a;
+  --navy-800:  #1e293b;
+  --navy-700:  #334155;
+  --navy-600:  #475569;
+  --navy-500:  #64748b;
+  --navy-400:  #94a3b8;
+  --navy-300:  #cbd5e1;
+  --navy-200:  #e2e8f0;
+  --navy-100:  #f1f5f9;
+  --navy-50:   #f8fafc;
 
-  --emerald-600:  #059669;
-  --emerald-500:  #10b981;
-  --emerald-400:  #34d399;
-  --emerald-100:  #d1fae5;
-  --emerald-50:   #ecfdf5;
+  /* Legacy indigo aliases resolve to the current blue system. */
+  --indigo-950: #0a2444;
+  --indigo-900: #0f3460;
+  --indigo-800: #0f4c81;
+  --indigo-700: #0b3a63;
+  --indigo-600: #0f4c81;
+  --indigo-500: #1565a8;
+  --indigo-400: #3b82f6;
+  --indigo-100: #dbeafe;
+  --indigo-50:  #eff6ff;
 
-  --amber-600:    #d97706;
-  --amber-500:    #f59e0b;
-  --amber-400:    #fbbf24;
-  --amber-100:    #fef3c7;
-  --amber-50:     #fffbeb;
+  /* Emerald */
+  --emerald-700: #047857;
+  --emerald-600: #059669;
+  --emerald-500: #10b981;
+  --emerald-400: #34d399;
+  --emerald-100: #d1fae5;
+  --emerald-50:  #ecfdf5;
 
-  --rose-600:     #e11d48;
-  --rose-500:     #f43f5e;
-  --rose-100:     #ffe4e6;
-  --rose-50:      #fff1f2;
+  /* Amber */
+  --amber-700: #b45309;
+  --amber-600: #d97706;
+  --amber-500: #f59e0b;
+  --amber-400: #fbbf24;
+  --amber-100: #fef3c7;
+  --amber-50:  #fffbeb;
 
-  --violet-600:   #7c3aed;
-  --violet-500:   #8b5cf6;
-  --violet-100:   #ede9fe;
-  --violet-50:    #f5f3ff;
+  /* Rose */
+  --rose-700:  #be123c;
+  --rose-600:  #e11d48;
+  --rose-500:  #f43f5e;
+  --rose-100:  #ffe4e6;
+  --rose-50:   #fff1f2;
 
-  --cyan-600:     #0891b2;
-  --cyan-500:     #06b6d4;
-  --cyan-100:     #cffafe;
-  --cyan-50:      #ecfeff;
+  /* Violet */
+  --violet-700: #6d28d9;
+  --violet-600: #7c3aed;
+  --violet-500: #8b5cf6;
+  --violet-100: #ede9fe;
+  --violet-50:  #f5f3ff;
 
-  --gold-500:     #f59e0b;
-  --gold-400:     #fbbf24;
+  /* Cyan */
+  --cyan-700: #0e7490;
+  --cyan-600: #0891b2;
+  --cyan-500: #06b6d4;
+  --cyan-100: #cffafe;
+  --cyan-50:  #ecfeff;
+}
 
-  /* ── Semantic tokens ── */
-  --primary:         var(--indigo-600);
-  --primary-dark:    var(--indigo-700);
-  --primary-light:   var(--indigo-50);
-  --primary-50:      var(--indigo-50);
-  --primary-100:     var(--indigo-100);
+/* ── Semantic design tokens (use these in components) ── */
+:root {
+  color-scheme: light;
 
-  --navy:            var(--navy-900);
-  --navy-800:        #1e293b;
-  --navy-700:        #334155;
-  --navy-600:        #475569;
+  /* Brand */
+  --brand:            #0f4c81;
+  --action:           #0f4c81;
+  --action-hover:     #0b3a63;
+  --on-action:        #ffffff;
 
-  --emerald:         var(--emerald-500);
-  --emerald-light:   var(--emerald-50);
+  /* Accent — use for icons and fills; too light for small text on white */
+  --emerald:          #10b981;
+  --emerald-readable: #047857; /* minimum contrast for body text on white */
 
-  --amber:           var(--amber-500);
-  --amber-light:     var(--amber-50);
+  /* Page & surface */
+  --bg:               #f8fafc;
+  --surface:          #ffffff;
+  --surface-muted:    #f1f5f9;
+  --text:             #0f172a;
+  --text-muted:       #475569;
+  --border:           #e5e7eb;
+  --control-border:   #64748b;
 
-  --rose:            var(--rose-600);
-  --rose-light:      var(--rose-50);
+  /* Sidebar */
+  --sidebar-bg:              #0f172a;
+  --sidebar-text:            #e2e8f0;
+  --sidebar-active:          rgba(16,185,129,.18);
+  --sidebar-active-border:   rgba(52,211,153,.42);
+  --sidebar-hover:           rgba(255,255,255,.07);
+  --sidebar-muted:           #cbd5e1;
+  --sidebar-icon:            #bfdbfe;
 
-  --violet:          var(--violet-600);
-  --violet-light:    var(--violet-50);
+  /* Public authentication navigation uses the same dark navy surface. */
+  --nav-on-color:       #f8fafc;
+  --nav-secondary-text: #cbd5e1;
+  --nav-icon-text:      #bfdbfe;
+  --nav-outline:        rgb(255 255 255 / 16%);
+  --nav-control-bg:     rgb(255 255 255 / 8%);
+  --nav-control-hover:  rgb(255 255 255 / 14%);
+  --nav-hover-bg:       rgb(255 255 255 / 8%);
+  --nav-active-bg:      rgb(15 76 129 / 72%);
+  --nav-active-border:  rgb(147 197 253 / 55%);
 
-  --cyan:            var(--cyan-600);
-  --cyan-light:      var(--cyan-50);
+  /* Status */
+  --success-text:    #047857;
+  --on-success:      #ffffff;
+  --success-bg:      #ecfdf5;
+  --success-border:  #a7f3d0;
+  --warning-text:    #92400e;
+  --warning-bg:      #fffbeb;
+  --warning-border:  #fde68a;
+  --danger-text:     #be123c;
+  --on-danger:       #ffffff;
+  --danger-bg:       #fff1f2;
+  --danger-border:   #fecdd3;
+  --neutral-text:    #475569;
+  --neutral-bg:      #f1f5f9;
+  --neutral-border:  #e2e8f0;
 
-  --success:         var(--emerald-500);
-  --success-light:   var(--emerald-50);
-  --warning:         var(--amber-500);
-  --warning-light:   var(--amber-50);
-  --danger:          var(--rose-600);
-  --danger-light:    var(--rose-50);
-  --info:            var(--cyan-600);
-  --info-light:      var(--cyan-50);
-  --purple:          var(--violet-600);
-  --purple-light:    var(--violet-50);
+  /* Focus */
+  --focus: #1d4ed8;
 
-  /* ── Surfaces ── */
-  --background:      #f0f4ff;
-  --surface:         #f8faff;
-  --card:            #ffffff;
-  --card-hover:      #fafbff;
-  --glass:           rgba(255,255,255,0.85);
-  --text:            var(--navy-900);
-  --text-secondary:  var(--navy-700);
-  --muted:           var(--navy-500);
-  --placeholder:     var(--navy-400);
-  --border:          var(--navy-200);
-  --border-light:    var(--navy-100);
+  /* Hero gradient */
+  --hero:      linear-gradient(135deg, #0f4c81, #1d4ed8);
+  --hero-text: #ffffff;
 
-  /* ── Shadows ── */
-  --shadow-xs:       0 1px 2px rgba(15,23,42,.04);
-  --shadow-sm:       0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
-  --shadow:          0 4px 12px rgba(15,23,42,.08), 0 2px 4px rgba(15,23,42,.04);
-  --shadow-md:       0 8px 24px rgba(15,23,42,.10), 0 2px 8px rgba(15,23,42,.06);
-  --shadow-lg:       0 16px 40px rgba(15,23,42,.12), 0 4px 12px rgba(15,23,42,.08);
-  --shadow-xl:       0 24px 60px rgba(15,23,42,.16), 0 8px 20px rgba(15,23,42,.10);
-  --shadow-indigo:   0 4px 20px rgba(79,70,229,.25);
-  --shadow-emerald:  0 4px 20px rgba(16,185,129,.25);
+  /* Charts */
+  --chart-primary:   #0f4c81;
+  --chart-secondary: #047857;
+  --chart-grid:      #e2e8f0;
 
-  /* ── Radii ── */
-  --radius-xs:   4px;
-  --radius-sm:   8px;
-  --radius:      12px;
-  --radius-lg:   16px;
-  --radius-xl:   20px;
-  --radius-2xl:  24px;
-  --radius-full: 9999px;
+  /* Typography */
+  --font-sans:    Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font:         var(--font-sans);   /* alias used by existing components */
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+  --text-xs:      0.75rem;
+  --text-sm:      0.875rem;
+  --text-base:    1rem;
+  --text-lg:      1.125rem;
+  --text-heading: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  --text-value:   clamp(1.75rem, 1.25rem + 1.5vw, 2.75rem);
+  --leading:      1.5;
+  --weight-label:   600;
+  --weight-heading: 700;
 
-  /* ── Typography ── */
-  --font:      'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* Aliases for legacy component references */
+  --font-size-support: 0.875rem; /* 14px */
+  --font-size-marker:  0.75rem;  /* 12px, nonessential section marker */
 
-  /* ── Motion ── */
-  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in:         cubic-bezier(0.4, 0, 1, 1);
-  --ease:            cubic-bezier(0.4, 0, 0.2, 1);
-  --transition:      all 0.2s var(--ease);
-  --transition-slow: all 0.35s var(--ease-out);
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --page-padding:  clamp(1rem, 2vw, 2rem);
+  --card-padding:  clamp(1rem, 1.5vw, 1.5rem);
+  --grid-gap:      clamp(1rem, 1.5vw, 1.5rem);
+
+  /* Border radii */
+  --radius-xs:      0.25rem;
+  --radius-sm:      0.5rem;
+  --radius:         0.75rem;
+  --radius-control: 0.625rem;
+  --radius-card:    1rem;
+  --radius-lg:      1rem;    /* matches --radius-card */
+  --radius-xl:      1.25rem;
+  --radius-2xl:     1.5rem;
+  --radius-full:    999px;
+  --radius-pill:    999px;
+
+  /* Shadows */
+  --shadow-xs:      0 1px 2px rgb(15 23 42 / 3%);
+  --shadow-sm:      0 1px 3px rgb(15 23 42 / 5%), 0 1px 2px rgb(15 23 42 / 3%);
+  --shadow:         0 4px 12px rgb(15 23 42 / 7%), 0 2px 4px rgb(15 23 42 / 3%);
+  --shadow-md:      0 8px 24px rgb(15 23 42 / 10%), 0 2px 8px rgb(15 23 42 / 6%);
+  --shadow-lg:      0 16px 40px rgb(15 23 42 / 12%), 0 4px 12px rgb(15 23 42 / 8%);
+  --shadow-xl:      0 24px 60px rgb(15 23 42 / 16%), 0 8px 20px rgb(15 23 42 / 10%);
+  --shadow-card:    0 1px 2px rgb(15 23 42 / 4%);
+  --shadow-overlay: 0 16px 48px rgb(15 23 42 / 18%);
+  --shadow-indigo:  0 4px 16px rgb(15 76 129 / 18%);
+  --shadow-emerald: 0 4px 20px rgb(16 185 129 / 25%);
+
+  /* Shell dimensions */
+  --navbar-height:      4rem;
+  --topbar-height:      4rem; /* alias for sidebar.css */
+  --sidebar-width:      16rem;     /* 256px — overridden by AppShell.js at runtime */
+  --sidebar-rail-width: 5rem;      /* 80px collapsed */
+  --content-max:        90rem;
+  --touch-target:       2.75rem;
+
+  /* Topbar */
+  --topbar-bg:     var(--surface);
+  --topbar-border: var(--border);
+  --topbar-shadow: 0 2px 10px rgb(15 23 42 / 7%);
+
+  /* z-index ladder */
+  --z-header:  20;
+  --z-backdrop: 40;
+  --z-drawer:   50;
+  --z-dialog:   60;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease:          cubic-bezier(0.2, 0, 0, 1);
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:       cubic-bezier(0.4, 0, 1, 1);
+  --transition: color 0.18s var(--ease), background-color 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+  --transition-slow: color 0.3s var(--ease-out), background-color 0.3s var(--ease-out), border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+
+  /* ── Legacy alias tokens (keep for backward compat with existing components) ── */
+  --primary:           var(--brand);
+  --primary-dark:      var(--action-hover);
+  --primary-light:     #eff6ff;
+  --primary-50:        var(--blue-50);
+  --primary-100:       var(--blue-100);
+  --brand-indigo:      var(--brand); /* legacy name; maps to current brand blue */
+  --brand-indigo-hover:var(--action-hover);
+  --navigation-navy:   var(--navy-900);
+  --page-background:   var(--bg);
+  --surface-white:     var(--surface);
+  --background:        var(--bg);
+  --card:              var(--surface);
+  --card-hover:        var(--surface-muted);
+  --muted:             var(--navy-500);
+  --placeholder:       var(--navy-400);
+  --text-secondary:    var(--navy-700);
+  --border-light:      var(--navy-100);
+
+  /* Status compat aliases */
+  --color-success-bg:     var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-danger-bg:      var(--danger-bg);
+  --color-danger-border:  var(--danger-border);
+  --color-warning-bg:     var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+
+  /* Misc */
+  --glass: rgba(255,255,255,0.85);
+  --emerald-light: var(--emerald-50);
+  --amber: var(--amber-500);
+  --amber-light: var(--amber-50);
+  --rose: var(--rose-600);
+  --rose-light: var(--rose-50);
+  --violet: var(--violet-600);
+  --violet-light: var(--violet-50);
+  --cyan: var(--cyan-600);
+  --cyan-light: var(--cyan-50);
+  --success: var(--success-text);
+  --success-light: var(--emerald-50);
+  --warning: var(--warning-text);
+  --warning-light: var(--amber-50);
+  --danger: var(--danger-text);
+  --danger-light: var(--rose-50);
+  --info: var(--cyan-700);
+  --info-light: var(--cyan-50);
+  --purple: var(--violet-600);
+  --purple-light: var(--violet-50);
+}
+
+/* ── Dark mode — data-theme attribute (explicit) ── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --navy-950: #f8fafc;
+  --navy-900: #f1f5f9;
+  --navy-800: #e2e8f0;
+  --navy-700: #cbd5e1;
+  --navy-600: #cbd5e1;
+  --navy-500: #94a3b8;
+  --navy-400: #64748b;
+  --navy-300: #475569;
+  --navy-200: #334155;
+  --navy-100: #1e293b;
+  --navy-50:  #0f172a;
+  --blue-50:  #172554;
+  --blue-100: #1e3a8a;
+  --indigo-50: #1e293b;
+  --indigo-100: #334155;
+  --emerald-readable: #6ee7b7;
+  --emerald-700: #6ee7b7;
+  --emerald-600: #34d399;
+  --emerald-100: #065f46;
+  --emerald-50: #064e3b;
+  --amber-700: #fde68a;
+  --amber-600: #fbbf24;
+  --amber-100: #92400e;
+  --amber-50: #78350f;
+  --rose-700: #fda4af;
+  --rose-600: #fb7185;
+  --rose-100: #9f1239;
+  --rose-50: #881337;
+  --violet-700: #c4b5fd;
+  --violet-600: #a78bfa;
+  --violet-100: #5b21b6;
+  --violet-50: #4c1d95;
+  --cyan-700: #67e8f9;
+  --cyan-600: #22d3ee;
+  --cyan-100: #155e75;
+  --cyan-50: #164e63;
+  --primary-light: var(--surface-muted);
+  --success: var(--success-text);
+  --warning: var(--warning-text);
+  --danger: var(--danger-text);
+  --info: var(--cyan-700);
+  --topbar-bg: var(--surface);
+  --topbar-border: var(--border);
+  --navigation-navy: var(--navy-900);
+  --brand:        #93c5fd;
+  --bg:            #020617;
+  --surface:       #0f172a;
+  --surface-muted: #1e293b;
+  --text:          #f8fafc;
+  --text-muted:    #cbd5e1;
+  --border:        #1e293b;
+  --control-border:#64748b;
+  --action:        #93c5fd;
+  --action-hover:  #bfdbfe;
+  --on-action:     #0f172a;
+  --success-text:  #6ee7b7;
+  --on-success:    #0f172a;
+  --success-bg:    #064e3b;
+  --success-border:#065f46;
+  --warning-text:  #fde68a;
+  --warning-bg:    #78350f;
+  --warning-border:#92400e;
+  --danger-text:   #fda4af;
+  --on-danger:     #0f172a;
+  --danger-bg:     #881337;
+  --danger-border: #9f1239;
+  --neutral-text:  #cbd5e1;
+  --neutral-bg:    #1e293b;
+  --neutral-border:#334155;
+  --focus:         #93c5fd;
+  --chart-primary: #93c5fd;
+  --chart-secondary:#6ee7b7;
+  --chart-grid:    #334155;
+  --shadow-card:   none;
+  --shadow-overlay:0 16px 48px rgb(0 0 0 / 40%);
+  /* cascade update for legacy aliases */
+  --background:        var(--bg);
+  --card:              var(--surface);
+  --card-hover:        var(--surface-muted);
+  --page-background:   var(--bg);
+  --surface-white:     var(--surface);
+  --muted:             #94a3b8;
+  --border-light:      var(--navy-800);
+}
+
+/* ── Dark mode — system preference (automatic) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --navy-950: #f8fafc;
+    --navy-900: #f1f5f9;
+    --navy-800: #e2e8f0;
+    --navy-700: #cbd5e1;
+    --navy-600: #cbd5e1;
+    --navy-500: #94a3b8;
+    --navy-400: #64748b;
+    --navy-300: #475569;
+    --navy-200: #334155;
+    --navy-100: #1e293b;
+    --navy-50:  #0f172a;
+    --blue-50:  #172554;
+    --blue-100: #1e3a8a;
+    --indigo-50: #1e293b;
+    --indigo-100: #334155;
+    --emerald-readable: #6ee7b7;
+    --emerald-700: #6ee7b7;
+    --emerald-600: #34d399;
+    --emerald-100: #065f46;
+    --emerald-50: #064e3b;
+    --amber-700: #fde68a;
+    --amber-600: #fbbf24;
+    --amber-100: #92400e;
+    --amber-50: #78350f;
+    --rose-700: #fda4af;
+    --rose-600: #fb7185;
+    --rose-100: #9f1239;
+    --rose-50: #881337;
+    --violet-700: #c4b5fd;
+    --violet-600: #a78bfa;
+    --violet-100: #5b21b6;
+    --violet-50: #4c1d95;
+    --cyan-700: #67e8f9;
+    --cyan-600: #22d3ee;
+    --cyan-100: #155e75;
+    --cyan-50: #164e63;
+    --brand:        #93c5fd;
+    --bg:            #020617;
+    --surface:       #0f172a;
+    --surface-muted: #1e293b;
+    --text:          #f8fafc;
+    --text-muted:    #cbd5e1;
+    --border:        #1e293b;
+    --control-border:#64748b;
+    --action:        #93c5fd;
+    --action-hover:  #bfdbfe;
+    --on-action:     #0f172a;
+    --success-text:  #6ee7b7;
+    --on-success:    #0f172a;
+    --success-bg:    #064e3b;
+    --success-border:#065f46;
+    --warning-text:  #fde68a;
+    --warning-bg:    #78350f;
+    --warning-border:#92400e;
+    --danger-text:   #fda4af;
+    --on-danger:     #0f172a;
+    --danger-bg:     #881337;
+    --danger-border: #9f1239;
+    --neutral-text:  #cbd5e1;
+    --neutral-bg:    #1e293b;
+    --neutral-border:#334155;
+    --focus:         #93c5fd;
+    --chart-primary: #93c5fd;
+    --chart-secondary:#6ee7b7;
+    --chart-grid:    #334155;
+    --shadow-card:   none;
+    --shadow-overlay:0 16px 48px rgb(0 0 0 / 40%);
+    --background:    var(--bg);
+    --card:          var(--surface);
+    --card-hover:    var(--surface-muted);
+    --page-background: var(--bg);
+    --surface-white: var(--surface);
+    --topbar-bg: var(--surface);
+    --topbar-border: var(--border);
+    --navigation-navy: var(--navy-900);
+    --primary-light: var(--surface-muted);
+    --primary-50: var(--blue-50);
+    --primary-100: var(--blue-100);
+    --brand-indigo: var(--brand);
+    --brand-indigo-hover: var(--action-hover);
+    --success: var(--success-text);
+    --warning: var(--warning-text);
+    --danger: var(--danger-text);
+    --info: var(--cyan-700);
+    --muted:         #94a3b8;
+    --border-light:  var(--navy-800);
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration:       0.01ms !important;
+    animation-iteration-count: 1    !important;
+    transition-duration:      0.01ms !important;
+    scroll-behavior:          auto  !important;
+  }
 }
 
 /* ── Reset & base ── */
@@ -148,26 +491,26 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  font-family: var(--font);
-  background: var(--background);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading);
+  background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
-  font-size: 14px;
 }
 
 /* ── Focus ring ── */
 :focus-visible {
-  outline: 2px solid var(--indigo-500);
-  outline-offset: 2px;
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--navy-300); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: var(--navy-300); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--navy-500); }
 
 /* ── Selection ── */
-::selection { background: var(--indigo-100); color: var(--indigo-800); }
+::selection { background: var(--blue-100); color: var(--navy-900); }

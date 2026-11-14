@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/", include("accounts.urls")),
     path("api/", include("core.urls")),
     path("api/", include("members.urls")),
+    path("api/accounting/", include("accounting.urls")),
     path("api/", include("core.payments_urls")),
     path("api/token/", custom_token_obtain, name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

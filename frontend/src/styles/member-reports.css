@@ -1,0 +1,18 @@
+.member-reports-page { display: grid; gap: 18px; min-width: 0; }
+.member-reports-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.member-reports-heading h1 { margin-bottom: 5px; }
+.member-reports-heading .section-subtitle { max-width: 760px; }
+.member-reports-panel { min-width: 0; overflow: hidden; }
+.member-loan-report-note { margin: 16px 20px 0; padding: 12px 14px; color: var(--navy-700); background: var(--indigo-50); border-left: 3px solid var(--brand-indigo); border-radius: 6px; font-size: 14px; line-height: 1.5; }
+.member-loan-report-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 20px 20px; }
+.member-loan-report-card { min-width: 0; padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius); background: #fff; }
+.member-loan-report-card > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.member-loan-report-card .ui-eyebrow { margin-bottom: 3px; }
+.member-loan-report-card h3 { margin: 0; color: var(--navy-950); font-size: 17px; }
+.member-loan-report-card > .ui-muted { margin: 12px 0 0; font-size: 13px; }
+.member-loan-report-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0 0; }
+.member-loan-report-facts > div { display: grid; gap: 5px; min-width: 0; padding: 10px; background: var(--indigo-50); border-radius: 7px; }
+.member-loan-report-facts dt { color: var(--navy-600); font-size: 13px; }
+.member-loan-report-facts dd { margin: 0; color: var(--navy-950); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .member-reports-heading { align-items: flex-start; flex-direction: column; } .member-reports-heading > .ui-button { width: 100%; } .member-loan-report-list { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .member-loan-report-list { padding-inline: 14px; } .member-loan-report-facts { grid-template-columns: minmax(0, 1fr); } }

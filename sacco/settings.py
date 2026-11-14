@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "accounts",
     "core",
     "members",
+    "accounting.apps.AccountingConfig",
 
     "django.contrib.admin",
     "django.contrib.auth",
@@ -119,7 +120,7 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME":   BASE_DIR / "db.sqlite3",
+        "NAME":   Path(os.getenv("SACCO_SQLITE_PATH") or BASE_DIR / "db.sqlite3"),
         }
     }
 
@@ -138,6 +139,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # ─────────────────────────────────────────────────────────────────────────────
 LANGUAGE_CODE = "en-us"
 TIME_ZONE     = "Africa/Nairobi"   # Kenya Standard Time (UTC+3)
+TRANSPORT_C2B_CALLBACK_TOKEN = os.getenv("TRANSPORT_C2B_CALLBACK_TOKEN", "")
 USE_I18N      = True
 USE_TZ        = True
 
@@ -148,6 +150,8 @@ STATIC_URL  = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL   = "media/"
 MEDIA_ROOT  = BASE_DIR / "media"
+WELFARE_PRIVATE_ROOT = os.getenv("WELFARE_PRIVATE_ROOT", BASE_DIR / "private" / "welfare")
+WELFARE_PAYOUT_PROVIDER = os.getenv("WELFARE_PAYOUT_PROVIDER", "")
 
 # WhiteNoise — serve compressed static files efficiently
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
@@ -296,6 +300,10 @@ SACCO_PAYBILL    = os.getenv("SACCO_PAYBILL",    os.getenv("MPESA_SHORTCODE", "1
 # ─────────────────────────────────────────────────────────────────────────────
 ID_DOC_MAX_MB = int(os.getenv("ID_DOC_MAX_MB", "5"))
 KYC_DOCUMENT_RETENTION_DAYS = int(os.getenv("KYC_DOCUMENT_RETENTION_DAYS", "730"))
+
+# KYC risk-score decision thresholds (0–100 composite score)
+KYC_AUTO_APPROVE_THRESHOLD = int(os.getenv("KYC_AUTO_APPROVE_THRESHOLD", "80"))
+KYC_REJECT_THRESHOLD = int(os.getenv("KYC_REJECT_THRESHOLD", "50"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Africa's Talking (SMS)

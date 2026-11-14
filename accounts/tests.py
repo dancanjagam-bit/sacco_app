@@ -1,6 +1,13 @@
+from io import BytesIO
+from tempfile import TemporaryDirectory
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image
 from rest_framework.test import APITestCase
 from members.models import Member
+from accounts.models import IDVerification, KYCConsentRecord, KYCSubmission, MemberApproval
 
 User = get_user_model()
 
@@ -37,7 +44,7 @@ class RegistrationTests(APITestCase):
                 f"Errors: {response.data}"
             )
 
-        self.assertIn(response.status_code, (200, 201))
+        self.assertEqual(response.status_code, 201)
         self.assertIn("member_number", response.data)
         self.assertTrue(response.data["member_number"].startswith("SACCO"))
 
@@ -57,7 +64,40 @@ class RegistrationTests(APITestCase):
         self.assertEqual(member.phone_number, "0712345678")
         self.assertEqual(member.county,       "Nairobi")
         self.assertEqual(member.gender,       self.VALID_PAYLOAD["gender"])
-        self.assertEqual(member.status,       "active")
+        self.assertEqual(member.status,       "inactive")
+        self.assertEqual(response.data["membership_status"], "pending_review")
+        self.assertEqual(IDVerification.objects.get(user=user).status, "draft")
+        self.assertEqual(MemberApproval.objects.filter(applicant=user, decision="pending").count(), 1)
+        self.assertEqual(KYCConsentRecord.objects.filter(user=user, purpose="id_verification").count(), 1)
+
+    def test_registration_with_id_document_creates_versioned_submission(self):
+        image_data = BytesIO()
+        Image.new("RGB", (640, 400), color=(225, 230, 235)).save(image_data, format="PNG")
+        image_data.seek(0)
+        upload = SimpleUploadedFile(
+            "synthetic-id-front.png", image_data.read(), content_type="image/png"
+        )
+
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.post(
+                "/api/register/",
+                {
+                    **self.VALID_PAYLOAD,
+                    "id_verification_consent": "true",
+                    "id_document_front": upload,
+                },
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        user = User.objects.get(username=self.VALID_PAYLOAD["username"])
+        verification = IDVerification.objects.get(user=user)
+        submission = KYCSubmission.objects.get(verification=verification, sequence=1)
+        self.assertEqual(submission.status, "submitted")
+        self.assertTrue(submission.consent_given)
+        self.assertTrue(submission.id_document_front.name.startswith("id_documents/submissions/"))
+        self.assertEqual(verification.status, "submitted")
+        self.assertEqual(User.objects.filter(username=self.VALID_PAYLOAD["username"]).count(), 1)
 
     def test_duplicate_username_rejected(self):
         """Registering a second account with the same username returns 400."""
@@ -76,6 +116,32 @@ class RegistrationTests(APITestCase):
         response = self.client.post("/api/register/", payload2, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("national_id", response.data)
+        self.assertNotIn("already registered", str(response.data.get("national_id", "")).lower())
+
+    def test_registration_retry_does_not_create_duplicate_account_or_review_records(self):
+        first = self.client.post("/api/register/", self.VALID_PAYLOAD, format="json")
+        second = self.client.post("/api/register/", self.VALID_PAYLOAD, format="json")
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 400)
+        user = User.objects.get(username=self.VALID_PAYLOAD["username"])
+        self.assertEqual(User.objects.filter(username=self.VALID_PAYLOAD["username"]).count(), 1)
+        self.assertEqual(Member.objects.filter(user=user).count(), 1)
+        self.assertEqual(IDVerification.objects.filter(user=user).count(), 1)
+        self.assertEqual(MemberApproval.objects.filter(applicant=user).count(), 1)
+
+    def test_registration_keeps_identity_verification_manual_even_if_provider_credentials_exist(self):
+        from accounts.services.id_verification_service import run_id_verification
+        from unittest.mock import patch
+
+        with patch("accounts.services.id_verification_service.run_id_verification", wraps=run_id_verification) as provider_path:
+            response = self.client.post("/api/register/", self.VALID_PAYLOAD, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        provider_path.assert_not_called()
+        verification = IDVerification.objects.get(user__username=self.VALID_PAYLOAD["username"])
+        self.assertEqual(verification.provider, "manual")
+        self.assertNotEqual(verification.status, "verified")
 
     def test_invalid_password_no_number(self):
         """Password without a number is rejected."""

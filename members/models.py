@@ -58,14 +58,10 @@ class Member(models.Model):
         default="active",
     )
 
-    # True once the member's first M-Pesa payment (registration fee) clears via
-    # Daraja.  Set to False for members who joined before Daraja integration or
-    # who have not yet completed their first payment.
+    # True once the member's first M-Pesa registration fee clears via Daraja.
     daraja_registered = models.BooleanField(
         default=False,
-        help_text="Member has completed their first Daraja/M-Pesa payment "
-                  "(registration fee).  Required before further SACCO payments "
-                  "can be made via M-Pesa.",
+        help_text="Member has completed the one-time Daraja registration fee.",
     )
 
     def __str__(self):

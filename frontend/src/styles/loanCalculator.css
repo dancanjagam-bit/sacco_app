@@ -1,0 +1,214 @@
+/* ── Loan calculator page ─────────────────────────────────────────────── */
+.calc-page {
+  display: grid;
+  gap: var(--grid-gap);
+  width: 100%;
+  max-width: 72rem;
+  min-width: 0;
+  margin-inline: auto;
+}
+.calc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+/* ── Panels ── */
+.calc-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+.calc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--card-padding);
+}
+.calc-field-error {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--danger-text);
+}
+
+/* ── Period picker ── */
+.calc-period-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.calc-period-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  transition: all 0.14s ease;
+  min-height: 60px;
+}
+.calc-period-btn:hover {
+  border-color: var(--brand);
+  background: var(--blue-50);
+}
+.calc-period-btn.is-selected {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.calc-period-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-label);
+}
+.calc-period-rate {
+  font-size: var(--text-xs);
+  opacity: 0.8;
+  font-weight: 600;
+}
+.calc-period-btn.is-selected .calc-period-rate { opacity: 0.75; }
+
+/* ── Rate table ── */
+.calc-rate-table-wrap {
+  min-width: 0;
+}
+.calc-rate-table-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.calc-rate-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.calc-rate-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.calc-rate-table th, .calc-rate-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.calc-rate-table th { font-weight: 700; color: var(--text-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.calc-rate-table .is-your-band { color: var(--brand); font-weight: 700; }
+.calc-rate-table .is-selected-row td { background: var(--blue-50); }
+
+/* ── Results column ── */
+.calc-results-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid-gap);
+}
+.calc-placeholder {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.calc-summary .ui-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--card-padding);
+}
+.calc-summary-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 0;
+}
+.calc-summary-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.calc-summary-facts dt {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-label);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.calc-summary-facts dd {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-heading);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.calc-summary-total {
+  grid-column: 1 / -1;
+}
+.calc-summary-total dt { color: var(--brand); }
+.calc-summary-total dd { font-size: var(--text-lg); color: var(--brand); }
+.calc-apply-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.calc-apply-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ── Schedule ── */
+.calc-schedule-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.calc-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.calc-schedule-table th, .calc-schedule-table td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.calc-schedule-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  z-index: 1;
+}
+.calc-schedule-table td { font-variant-numeric: tabular-nums; }
+.calc-bal-zero { color: var(--success-text); font-weight: 700; }
+
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .calc-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .calc-period-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calc-summary-facts { grid-template-columns: minmax(0, 1fr); }
+  .calc-summary-total { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .calc-page *, .calc-page *::before, .calc-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

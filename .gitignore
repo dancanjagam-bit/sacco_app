@@ -3,14 +3,10 @@ venv/
 *.pyc
 __pycache__/
 *.sqlite3
+/private/
 db.sqlite3
 .env
 .env.*
-
-# Member identity documents and local development tools
-/media/
-/.vscode/
-/cloudflared.exe
 
 # Logs
 logs/
@@ -24,3 +20,12 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local-only artifacts
+.recovery/
+.vscode/
+cloudflared.exe
+media/
+test_err.txt
+test_out.txt
+*.sqlite3-journal

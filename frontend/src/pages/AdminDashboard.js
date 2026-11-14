@@ -1,215 +1,259 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import Layout from "../components/Layout";
 import MonthlyChart from "../components/MonthlyChart";
-import LoanStatusChart from "../components/LoanStatusChart";
-import "../styles/dashboard.css";
+import MetricCard from "../components/ui/MetricCard";
+import StatusBadge from "../components/ui/StatusBadge";
+import Icon from "../components/ui/Icon";
+import Button from "../components/ui/Button";
+import PageHeading from "../components/ui/PageHeading";
+import FeedbackMessage from "../components/ui/FeedbackMessage";
+import DataTable from "../components/ui/DataTable";
+import LoadingState from "../components/ui/LoadingState";
+import "../styles/premiumDashboard.css";
+import "../styles/staffDashboard.css";
 
-function KpiCard({ label, value, icon, color, iconBg, meta, link }) {
-  const inner = (
-    <div className="kpi-card" style={{ "--kpi-color": color, "--kpi-icon-bg": iconBg, cursor: link ? "pointer" : "default" }}>
-      <p className="kpi-label">{label}</p>
-      <h2 className="kpi-value">{value}</h2>
-      {meta && <p className="kpi-meta" style={{ color: "var(--muted)" }}>{meta}</p>}
-      <div className="kpi-icon">{icon}</div>
-    </div>
-  );
-  return link ? <Link to={link} style={{ textDecoration: "none" }}>{inner}</Link> : inner;
+function formatKES(value) {
+  if (value == null || (typeof value === "string" && !value.trim())) return "Unavailable";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "Unavailable";
+  return `KES ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatCount(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "Unavailable";
+  return Number(value).toLocaleString("en-KE");
+}
+
+function formatDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime())
+    ? date.toLocaleString("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" })
+    : "Date unavailable";
+}
+
+function hasCount(value) {
+  return value !== null && value !== undefined && value !== "" &&
+    Number.isFinite(Number(value)) && Number(value) >= 0;
 }
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [stats,   setStats]   = useState(null);
-  const [error,   setError]   = useState(null);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState("6");
+  const [updatedAt, setUpdatedAt] = useState(null);
 
-  useEffect(() => { fetchDashboard(); }, []);
-
-  const fetchDashboard = async () => {
-    setError(null);
+  const fetchDashboard = useCallback(async () => {
+    setError("");
     setLoading(true);
     try {
-      const res = await api.get("admin/dashboard/");
-      setStats(res.data);
+      const response = await api.get("admin/dashboard/");
+      if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
+        throw new Error("Unexpected dashboard response");
+      }
+      setStats(response.data);
+      setUpdatedAt(new Date());
     } catch {
-      setError("Failed to load dashboard data.");
+      setError("Dashboard data could not be refreshed. Try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const h = new Date().getHours();
-  const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const chairman = user?.staff_role === "chairman";
+  const hasLoanReviewPermission = user?.permissions?.includes("loans.appraise");
+  const monthlySavingsProvided = Array.isArray(stats?.monthly_savings);
+  const validMonthlySavings = monthlySavingsProvided
+    ? stats.monthly_savings.filter((entry) => entry && typeof entry.month === "string" && entry.month.trim() && entry.total != null && Number.isFinite(Number(entry.total)))
+    : null;
+  const savingsByMonth = validMonthlySavings
+    ? validMonthlySavings.slice(-Number(period))
+    : null;
+  const recentTransactions = Array.isArray(stats?.recent_transactions)
+    ? stats.recent_transactions
+    : null;
+  const pendingLoans = formatCount(stats?.pending_loans);
+  const pendingLoansKnown = hasCount(stats?.pending_loans);
+  const asOf = updatedAt
+    ? updatedAt.toLocaleString("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" })
+    : "";
 
   return (
     <Layout>
-      {() => (
-        <div>
-          {/* ── Welcome banner ── */}
-          <div style={{
-            background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)",
-            borderRadius: "16px", padding: "24px 32px", marginBottom: "24px",
-            color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center",
-            boxShadow: "0 8px 32px rgba(37,99,235,.25)", position: "relative", overflow: "hidden",
-          }}>
-            <div style={{ position: "absolute", top: "-40px", right: "60px", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(255,255,255,.04)" }} />
-            <div>
-              <p style={{ margin: "0 0 2px", fontSize: "13px", color: "rgba(255,255,255,.6)" }}>{greet},</p>
-              <h1 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: "800" }}>
-                {user?.first_name || user?.username} 👋
-              </h1>
-              <p style={{ margin: 0, fontSize: "12px", color: "rgba(255,255,255,.5)" }}>
-                SACCO Administration · {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-              </p>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <button onClick={fetchDashboard} style={{ padding: "8px 18px", background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.2)", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600", backdropFilter: "blur(8px)" }}>
-                🔄 Refresh
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div className="alert alert-error" style={{ marginBottom: "20px" }}>
-              ⚠️ {error}
-              <button onClick={fetchDashboard} style={{ marginLeft: "12px", padding: "4px 12px", background: "none", border: "1px solid currentColor", borderRadius: "6px", cursor: "pointer", color: "inherit", fontSize: "12px" }}>
-                Retry
-              </button>
-            </div>
-          )}
-
-          {loading && !stats && (
-            <div style={{ display: "flex", justifyContent: "center", padding: "60px", color: "var(--muted)", gap: "12px", fontSize: "14px" }}>
-              <span style={{ animation: "spin .6s linear infinite", display: "inline-block" }}>⟳</span>
-              Loading dashboard...
-            </div>
-          )}
-
-          {stats && (
+      <div className="staff-dashboard">
+        <PageHeading
+          eyebrow={chairman ? "Chairperson overview" : "Staff operations"}
+          title={`${greeting}, ${user?.first_name || user?.username || "team"}`}
+          description="A clear view of recorded SACCO activity and work awaiting review."
+          actions={
             <>
-              {/* ── KPI row 1: Members & Money ── */}
-              <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-                <KpiCard label="Total Members"    value={stats.total_members}    icon="👥" color="#2563eb" iconBg="#eff6ff" meta="Active SACCO members" link="/admin/members" />
-                <KpiCard label="Total Savings"    value={`KES ${Number(stats.total_savings).toLocaleString()}`}    icon="💰" color="#059669" iconBg="#d1fae5" meta="Net member deposits" />
-                <KpiCard label="Active Loan Book" value={`KES ${Number(stats.active_loans).toLocaleString()}`}    icon="🏦" color="#7c3aed" iconBg="#ede9fe" meta="Outstanding balances" />
-                <KpiCard label="Interest Earned"  value={`KES ${Number(stats.interest_earned).toLocaleString()}`} icon="📈" color="#d97706" iconBg="#fef3c7" meta="Total interest revenue" />
-              </div>
-
-              {/* ── KPI row 2: Loan pipeline ── */}
-              <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: "24px" }}>
-                <KpiCard label="Pending Approval"  value={stats.pending_loans}  icon="⏳" color="#d97706" iconBg="#fef3c7" meta="Awaiting decision" link="/admin/loans" />
-                <KpiCard label="Approved Loans"    value={stats.approved_loans} icon="✅" color="#059669" iconBg="#d1fae5" meta="Currently active" link="/admin/loans" />
-                <KpiCard label="Repaid Loans"      value={stats.repaid_loans}   icon="🎉" color="#2563eb" iconBg="#eff6ff" meta="Fully settled" />
-                <KpiCard label="Rejected Loans"    value={stats.rejected_loans} icon="❌" color="#e11d48" iconBg="#ffe4e6" meta="Not approved" />
-              </div>
-
-              {/* ── Charts row 1 ── */}
-              <div className="dashboard-row">
-                <div className="chart-panel">
-                  <MonthlyChart title="📈 Monthly Savings Trend" data={stats.monthly_savings} color="#059669" />
-                </div>
-                <div className="chart-panel">
-                  <LoanStatusChart data={stats.loan_status} />
-                </div>
-              </div>
-
-              {/* ── Charts row 2 ── */}
-              <div className="dashboard-row">
-                <div className="chart-panel">
-                  <MonthlyChart title="💸 Monthly Disbursements" data={stats.monthly_loans} color="#7c3aed" />
-                </div>
-                <div className="chart-panel">
-                  <MonthlyChart title="🔄 Monthly Repayments" data={stats.monthly_repayments} color="#2563eb" />
-                </div>
-              </div>
-
-              {/* ── Bottom row: activity + savers ── */}
-              <div className="dashboard-row">
-                {/* Recent transactions */}
-                <div className="chart-panel">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                    <p className="panel-title" style={{ margin: 0 }}>📋 Recent Activity</p>
-                    <Link to="/admin/loans" style={{ fontSize: "12px", color: "var(--primary)", fontWeight: "600", textDecoration: "none" }}>View all →</Link>
-                  </div>
-                  <table className="table">
-                    <thead>
-                      <tr><th>Member</th><th>Type</th><th>Amount</th><th>Date</th></tr>
-                    </thead>
-                    <tbody>
-                      {(stats.recent_transactions || []).length === 0 ? (
-                        <tr><td colSpan="4" style={{ textAlign: "center", color: "var(--muted)", padding: "20px" }}>No transactions yet</td></tr>
-                      ) : (stats.recent_transactions || []).map(t => (
-                        <tr key={t.id}>
-                          <td style={{ fontWeight: "600" }}>{t.member}</td>
-                          <td>
-                            <span className={`status status-${t.type === "deposit" ? "approved" : t.type === "repayment" ? "repaid" : "pending"}`}>
-                              {t.type}
-                            </span>
-                          </td>
-                          <td style={{ fontWeight: "700" }}>KES {Number(t.amount).toLocaleString()}</td>
-                          <td style={{ color: "var(--muted)", fontSize: "12px" }}>
-                            {new Date(t.created_at).toLocaleDateString("en-KE")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Top savers */}
-                <div className="chart-panel">
-                  <p className="panel-title">🏆 Top Savers</p>
-                  {(stats.top_savers || []).length === 0 ? (
-                    <div className="empty-state" style={{ padding: "30px 0" }}>
-                      <span className="empty-icon">💰</span>
-                      <p>No savings on record yet.</p>
-                    </div>
-                  ) : (stats.top_savers || []).map((s, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "14px", padding: "12px 0", borderBottom: i < (stats.top_savers.length - 1) ? "1px solid var(--border-light)" : "none" }}>
-                      <div style={{
-                        width: "36px", height: "36px", borderRadius: "50%",
-                        background: i === 0 ? "#fef3c7" : i === 1 ? "#f1f5f9" : i === 2 ? "#fef3c7" : "var(--primary-light)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "18px", fontWeight: "700", flexShrink: 0,
-                      }}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: "700", fontSize: "13px" }}>{s.username}</p>
-                      </div>
-                      <span style={{ fontWeight: "800", fontSize: "13px", color: "var(--emerald)" }}>
-                        KES {Number(s.total).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Quick links ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
-                {[
-                  { to: "/admin/members",       icon: "👥", label: "Members",       color: "#2563eb", bg: "#eff6ff" },
-                  { to: "/admin/loans",          icon: "🏦", label: "Loan Approvals",color: "#7c3aed", bg: "#ede9fe" },
-                  { to: "/admin/exit-requests",  icon: "🚪", label: "Exit Requests", color: "#d97706", bg: "#fef3c7" },
-                  { to: "/admin/audit",          icon: "🔍", label: "Audit Engine",  color: "#e11d48", bg: "#ffe4e6" },
-                  { to: "/reports",              icon: "📊", label: "Reports",       color: "#059669", bg: "#d1fae5" },
-                  { to: "/admin/settings",       icon: "⚙️", label: "Settings",     color: "#0891b2", bg: "#cffafe" },
-                ].map(a => (
-                  <Link key={a.to} to={a.to} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 16px", borderRadius: "10px", background: a.bg, textDecoration: "none", transition: "var(--transition)", border: "1px solid transparent" }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor = a.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateY(0)"; }}
-                  >
-                    <span style={{ fontSize: "20px" }}>{a.icon}</span>
-                    <span style={{ fontWeight: "700", fontSize: "12px", color: a.color }}>{a.label}</span>
-                  </Link>
-                ))}
-              </div>
+              <StatusBadge status="active" label={chairman ? "Chairperson workspace" : "Staff workspace"} />
+              <Button variant="secondary" onClick={fetchDashboard} loading={loading}>
+                <Icon name="refresh" size={16} /> Refresh
+              </Button>
             </>
-          )}
-        </div>
-      )}
+          }
+        />
+
+        {error && (
+          <FeedbackMessage
+            tone={stats ? "warning" : "danger"}
+            title={stats ? "Showing the last successful update" : "Dashboard unavailable"}
+            action={<Button variant="secondary" onClick={fetchDashboard} loading={loading}>Retry</Button>}
+          >
+            {error}{asOf ? ` Last successful update: ${asOf}.` : ""}
+          </FeedbackMessage>
+        )}
+
+        {loading && !stats && <LoadingState label="Loading operations data…" />}
+        {loading && stats && <p className="staff-refresh-indicator" role="status">Refreshing recorded activity…</p>}
+
+        {stats && (
+          <>
+            <section className="hero-metric-card" aria-labelledby="staff-hero-title">
+              <div className="hero-metric-copy">
+                <p className="hero-metric-eyebrow" id="staff-hero-title">Member savings recorded · all time</p>
+                <p className="hero-metric-value">{formatKES(stats.total_savings)}</p>
+                <p className="hero-metric-note">
+                  Sum of recorded member savings entries. Savings and loan balances are reported separately.
+                  {asOf ? ` Updated ${asOf}.` : ""}
+                </p>
+              </div>
+              <div className="hero-metric-icon" aria-hidden="true"><Icon name="coins" size={48} /></div>
+            </section>
+
+            <section className="bento-grid staff-kpi-grid" aria-label="Recorded operational metrics">
+              <MetricCard
+                label="Registered member records"
+                value={formatCount(stats.total_members)}
+                helper="Member records in the system"
+                icon="users"
+              />
+              <MetricCard
+                label="Recorded approved-loan balances"
+                value={formatKES(stats.active_loans)}
+                helper="Stored balances; the system does not confirm loan disbursement"
+                icon="bank"
+              />
+              <MetricCard
+                label="Approved applications"
+                value={formatCount(stats.approved_loans)}
+                helper="Approval is separate from disbursement"
+                icon="file"
+              />
+            </section>
+
+            <section className="premium-chart-panel" aria-labelledby="staff-savings-chart-title">
+              <div className="premium-chart-header">
+                <div>
+                  <h2 className="premium-chart-title" id="staff-savings-chart-title">Monthly savings entries</h2>
+                  <p className="staff-dashboard-support">Recorded member savings amounts by entry month.</p>
+                </div>
+                <label className="staff-period-control">
+                  <span className="sr-only">Chart time period</span>
+                  <select
+                    className="chart-period-select"
+                    value={period}
+                    onChange={(event) => setPeriod(event.target.value)}
+                    aria-label="Chart time period"
+                  >
+                    <option value="6">6 latest available months</option>
+                    <option value="12">12 latest available months</option>
+                  </select>
+                </label>
+              </div>
+              {savingsByMonth === null || (monthlySavingsProvided && stats.monthly_savings.length > 0 && savingsByMonth.length === 0) ? (
+                <div className="ui-empty" role="status">
+                  <strong>Monthly savings data unavailable</strong>
+                  <p>This response did not include a usable monthly savings series.</p>
+                </div>
+              ) : savingsByMonth.length === 0 ? (
+                <div className="ui-empty" role="status">
+                  <strong>No monthly savings entries</strong>
+                  <p>Monthly amounts will appear here when recorded data is available.</p>
+                </div>
+              ) : (
+                <MonthlyChart title="Monthly savings amounts" data={savingsByMonth} color="var(--chart-primary)" />
+              )}
+            </section>
+
+            <section className="staff-dashboard-lower-grid" aria-label="Work queue and recent activity">
+              {hasLoanReviewPermission && (
+                <article className="ui-panel staff-queue-panel">
+                  <div className="ui-panel-header">
+                    <div>
+                      <h2 className="ui-panel-title">Loan review queue</h2>
+                      <p className="staff-dashboard-support">Applications currently marked pending.</p>
+                    </div>
+                    {!pendingLoansKnown ? (
+                      <StatusBadge status="needs_review" label="Count unavailable" />
+                    ) : (
+                      <StatusBadge
+                        status={Number(stats.pending_loans) > 0 ? "pending" : "confirmed"}
+                        label={Number(stats.pending_loans) > 0 ? "Needs review" : "Up to date"}
+                      />
+                    )}
+                  </div>
+                  <div className="ui-panel-body staff-queue-body">
+                    <strong className="staff-queue-count">{pendingLoans}</strong>
+                    <span>pending applications</span>
+                    <Button as={Link} to="/admin/loans" variant="primary">
+                      Review applications <Icon name="arrowRight" size={16} />
+                    </Button>
+                  </div>
+                </article>
+              )}
+
+              <article className="ui-panel staff-activity-panel">
+                <div className="ui-panel-header">
+                  <div>
+                    <h2 className="ui-panel-title">Recent account activity</h2>
+                    <p className="staff-dashboard-support">Most recently recorded ledger transactions.</p>
+                  </div>
+                  <Icon name="receipt" size={18} aria-hidden="true" />
+                </div>
+                {recentTransactions === null ? (
+                  <div className="ui-empty" role="status">
+                    <strong>Recent activity unavailable</strong>
+                    <p>This response did not include recent account activity.</p>
+                  </div>
+                ) : recentTransactions.length === 0 ? (
+                  <div className="ui-empty" role="status">
+                    <strong>No recent activity</strong>
+                    <p>Recorded transactions will appear here.</p>
+                  </div>
+                ) : (
+                  <DataTable label="Recent account activity" className="staff-activity-table">
+                    <table className="ui-table">
+                      <thead>
+                        <tr><th scope="col">Member</th><th scope="col">Activity</th><th scope="col">Amount</th><th scope="col">Recorded</th></tr>
+                      </thead>
+                      <tbody>
+                        {recentTransactions.map((transaction) => (
+                          <tr key={transaction.id}>
+                            <td>{transaction.member || "Member unavailable"}</td>
+                            <td className="staff-activity-type">{String(transaction.type || "Activity").replaceAll("_", " ")}</td>
+                            <td className="ui-money">{formatKES(transaction.amount)}</td>
+                            <td>{formatDate(transaction.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </DataTable>
+                )}
+              </article>
+            </section>
+          </>
+        )}
+      </div>
     </Layout>
   );
 }

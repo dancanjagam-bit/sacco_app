@@ -1,7 +1,7 @@
 """
 Notification delivery service.
-Handles Email (Django SMTP) and SMS (Africa's Talking).
-Falls back to console printing in development.
+Handles Email (Django SMTP) and SMS (Africa's Talking). OTP delivery never
+falls back to console or in-memory output and reports provider acceptance only.
 """
 import logging
 from django.conf import settings
@@ -13,12 +13,24 @@ logger = logging.getLogger("sacco")
 
 def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
     if not to_email:
-        return
-    if not getattr(settings, "EMAIL_HOST", ""):
-        logger.warning("Email notification skipped because SMTP is not configured")
-        return
+        return {"status": "unavailable", "reason_code": "destination_missing"}
+    required_settings = (
+        "EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD", "DEFAULT_FROM_EMAIL",
+    )
+    missing_settings = [
+        name for name in required_settings if not getattr(settings, name, "")
+    ]
+    if missing_settings:
+        logger.warning(
+            "Email notification skipped because SMTP configuration is incomplete (missing=%s)",
+            ",".join(missing_settings),
+        )
+        return {"status": "unavailable", "reason_code": "email_credentials_incomplete"}
+    if getattr(settings, "EMAIL_BACKEND", "") != "django.core.mail.backends.smtp.EmailBackend":
+        logger.warning("Email notification skipped because the configured backend is not an external SMTP provider")
+        return {"status": "unavailable", "reason_code": "email_backend_not_external"}
     try:
-        send_mail(
+        sent = send_mail(
             subject=subject,
             message=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
@@ -26,9 +38,14 @@ def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
             html_message=html_body,
             fail_silently=False,
         )
-        logger.info("Email notification sent")
+        if sent != 1:
+            logger.warning("Email provider accepted no OTP message")
+            return {"status": "failed", "reason_code": "provider_rejected"}
+        logger.info("Email provider accepted notification")
+        return {"status": "accepted", "reason_code": ""}
     except Exception as e:
         logger.error("Email notification failed (%s)", type(e).__name__)
+        return {"status": "failed", "reason_code": "provider_error"}
 
 
 def _send_sms(to_phone: str, message: str):
@@ -39,7 +56,7 @@ def _send_sms(to_phone: str, message: str):
     if not at_username or not at_api_key:
         # Never write OTPs or financial notifications to logs or the console.
         logger.warning("SMS delivery skipped because Africa's Talking is not configured")
-        return
+        return {"status": "unavailable", "reason_code": "sms_not_configured"}
 
     try:
         import africastalking
@@ -50,9 +67,19 @@ def _send_sms(to_phone: str, message: str):
         if phone.startswith("0"):
             phone = "+254" + phone[1:]
         response = sms.send(message, [phone])
-        logger.info("SMS notification submitted to provider")
+        recipient_results = (response or {}).get("SMSMessageData", {}).get("Recipients", [])
+        if not recipient_results or not all(
+            str(result.get("status", "")).lower() == "success"
+            or str(result.get("statusCode", "")) == "101"
+            for result in recipient_results
+        ):
+            logger.warning("SMS provider did not confirm request acceptance")
+            return {"status": "failed", "reason_code": "provider_rejected"}
+        logger.info("SMS provider accepted notification")
+        return {"status": "accepted", "reason_code": ""}
     except Exception as e:
         logger.error("SMS notification failed (%s)", type(e).__name__)
+        return {"status": "failed", "reason_code": "provider_error"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,20 +91,21 @@ def send_otp(user, otp_code: str, method: str):
     msg = f"Your SACCO OTP is: {otp_code}. Valid for 10 minutes. Do not share this code."
 
     if method == "email":
-        _send_email(user.email, "SACCO — Your OTP Code", msg)
+        return _send_email(user.email, "SACCO — Your OTP Code", msg)
 
     elif method == "recovery_email":
-        _send_email(user.recovery_email, "SACCO — Your OTP Code", msg)
+        return _send_email(user.recovery_email, "SACCO — Your OTP Code", msg)
 
     elif method == "phone":
         phone = getattr(getattr(user, "member_profile", None), "phone_number", "")
-        _send_sms(phone, msg)
+        return _send_sms(phone, msg)
 
     elif method == "recovery_phone":
-        _send_sms(user.recovery_phone, msg)
+        return _send_sms(user.recovery_phone, msg)
 
     else:
         logger.warning(f"Unknown OTP method: {method}")
+        return {"status": "unavailable", "reason_code": "unsupported_method"}
 
 
 def send_welcome(user, member_number: str):
