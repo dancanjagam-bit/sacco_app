@@ -66,3 +66,8 @@ class Member(models.Model):
 
     def __str__(self):
         return f"{self.member_number} - {self.user.get_full_name()}"
+
+
+class MemberProfilePhoto(models.Model):
+    member = models.OneToOneField(Member, on_delete=models.CASCADE, related_name="profile_photo")
+    image = models.BinaryField()

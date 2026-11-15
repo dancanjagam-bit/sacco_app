@@ -1,10 +1,14 @@
+import os
+
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from django.conf import settings
+from django.db import DatabaseError
 from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenRefreshView
 from accounts.auth_views import custom_token_obtain
+from members.models import MemberProfilePhoto
 from .seo import (
     GOOGLE_VERIFICATION_FILENAME,
     NonIndexableReactView,
@@ -13,11 +17,21 @@ from .seo import (
     sitemap_xml,
 )
 
+def health(request):
+    if os.environ.get("RENDER") != "true":
+        return JsonResponse({"status": "ok", "service": "sacco-backend"})
+    try:
+        MemberProfilePhoto.objects.exists()
+    except DatabaseError:
+        return JsonResponse({"status": "unavailable", "service": "sacco-backend"}, status=503)
+    return JsonResponse({"status": "ok", "service": "sacco-backend", "profile_photos_ready": True})
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
 
     # Health check endpoint for Render / uptime monitoring
-    path("api/health/", lambda request: JsonResponse({"status": "ok", "service": "sacco-backend"})),
+    path("api/health/", health),
 
     # API
     path("api/", include("accounts.urls")),

@@ -66,3 +66,18 @@
   .profile-security-card { align-items: stretch; flex-direction: column; }
   .profile-security-card .ui-button { width: 100%; }
 }
+.member-profile-photo { display: grid; gap: 16px; }
+.member-profile-photo .member-profile-form { grid-template-columns: minmax(0, 1fr); }
+.member-profile-photo-frame {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--control-border);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+.member-profile-photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+.member-profile-photo input::file-selector-button { color: var(--text); background: var(--surface-muted); }

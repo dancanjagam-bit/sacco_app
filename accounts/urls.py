@@ -1,5 +1,6 @@
 from django.urls import path
 from .auth_views import resend_login_2fa
+from .profile_photo_views import profile_photo
 from . import kyc_views
 from . import access_views
 from . import welfare_views
@@ -35,6 +36,7 @@ urlpatterns = [
     path("login/2fa/resend/", resend_login_2fa, name="login-2fa-resend"),
     path("change-password/", change_password, name="change-password"),
     path("profile/",         profile,         name="profile"),
+    path("profile/photo/",   profile_photo,   name="profile-photo"),
     path("profile/recovery-contact/request/", views_request_recovery_contact_verification, name="recovery-contact-request"),
     path("profile/recovery-contact/confirm/", views_confirm_recovery_contact_verification, name="recovery-contact-confirm"),
     path("forgot-password/", forgot_password, name="forgot-password"),

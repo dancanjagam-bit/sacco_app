@@ -219,9 +219,14 @@ def request_erasure(user, request=None):
     Returns a summary dict.
     """
     from accounts.models import IDVerification, AuditLog
+    from members.models import MemberProfilePhoto
     import os
 
     summary = {"redacted": [], "files_removed": [], "deactivated": False}
+
+    deleted, _ = MemberProfilePhoto.objects.filter(member__user=user).delete()
+    if deleted:
+        summary["files_removed"].append("profile_photo")
 
     try:
         member = user.member_profile

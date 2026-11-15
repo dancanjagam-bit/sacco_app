@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
+import ProfilePhoto from "../components/ProfilePhoto";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
@@ -85,6 +86,7 @@ export default function Profile() {
           </div>
         </section>
         <aside className="member-profile-side">
+          {profile.member_number && <ProfilePhoto hasPhoto={profile.has_profile_photo} />}
           <section className="ui-panel member-profile-card" aria-labelledby="account-details-title">
             <div className="ui-panel-header"><h2 className="ui-panel-title" id="account-details-title">Account details</h2></div>
             <div className="ui-panel-body"><dl className="member-profile-details">{[["Member number", profile.member_number], ["Username", profile.username], ["Gender", profile.gender], ["Date of birth", profile.date_of_birth], ["Date joined", profile.date_joined], ["Membership status", profile.status]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not set"}</dd></div>)}</dl></div>

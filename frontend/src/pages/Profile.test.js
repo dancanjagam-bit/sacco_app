@@ -35,3 +35,27 @@ test("profile load failure has a retry state instead of blank content", async ()
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(await screen.findByRole("heading", { name: "Personal information" })).toBeInTheDocument();
 });
+
+test("member can upload a photo and load the authenticated preview", async () => {
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+  URL.createObjectURL = jest.fn().mockReturnValue("blob:profile-photo");
+  URL.revokeObjectURL = jest.fn();
+  try {
+    api.get.mockResolvedValueOnce({ data: { member_number: "TEST01", has_profile_photo: false } })
+      .mockResolvedValueOnce({ data: new Blob(["photo"], { type: "image/jpeg" }) });
+    api.post.mockResolvedValueOnce({ data: { has_profile_photo: true } });
+    const { unmount } = render(<MemoryRouter><Profile /></MemoryRouter>);
+    const file = new File(["test image"], "profile.png", { type: "image/png" });
+    fireEvent.change(await screen.findByLabelText("Choose photo"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Save photo" }));
+    expect(await screen.findByRole("img", { name: "Your member portrait" })).toHaveAttribute("src", "blob:profile-photo");
+    expect(api.post.mock.calls[0][0]).toBe("profile/photo/");
+    expect(api.post.mock.calls[0][1].get("photo")).toBe(file);
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:profile-photo");
+  } finally {
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  }
+});

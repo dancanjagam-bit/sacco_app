@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
-from members.models import Member
+from members.models import Member, MemberProfilePhoto
 from core.models import Savings, Loan
 from .models import OTPRequest, StaffProfile, Notification, AuditLog, MemberNotice
 from .access import has_sacco_permission, is_staff_manager, requires_staff_login_2fa
@@ -94,6 +94,7 @@ def _profile_response(user):
         "staff_role":      staff_role,
         "member_number":   member.member_number  if member else None,
         "phone_number":    member.phone_number   if member else None,
+        "has_profile_photo": bool(member and MemberProfilePhoto.objects.filter(member=member).exists()),
         "gender":          member.gender         if member else None,
         "date_of_birth":   str(member.date_of_birth)  if member else None,
         "county":          member.county         if member else None,
