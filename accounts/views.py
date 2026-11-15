@@ -53,7 +53,7 @@ def _find_user(identifier: str):
         pass
     try:
         return User.objects.get(email__iexact=identifier)
-    except User.DoesNotExist:
+    except (User.DoesNotExist, User.MultipleObjectsReturned):
         pass
     return None
 
@@ -680,16 +680,19 @@ def forgot_password(request):
     method     = serializer.validated_data["method"]
 
     user = _find_user(identifier)
-    generic_message = "If the account and delivery method are valid, an OTP has been sent."
-    if not user:
+    generic_message = "If this account can receive a code by the selected method, look for it in your email or text messages."
+    if not user or not user.is_active:
         return Response({"message": generic_message})
 
-    verified_destination = (
-        method == "recovery_email" and user.recovery_email_verified and bool(user.recovery_email)
-    ) or (
-        method == "recovery_phone" and user.recovery_phone_verified and bool(user.recovery_phone)
-    )
-    if not verified_destination:
+    # A backup contact can receive reset codes only after ownership verification.
+    if method == "recovery_email" and not (user.recovery_email_verified and user.recovery_email):
+        method = "email"
+    elif method == "recovery_phone" and not (user.recovery_phone_verified and user.recovery_phone):
+        method = "phone"
+
+    if method == "email" and not user.email:
+        return Response({"message": generic_message})
+    if method == "phone" and not getattr(getattr(user, "member_profile", None), "phone_number", ""):
         return Response({"message": generic_message})
 
     now = timezone.now()

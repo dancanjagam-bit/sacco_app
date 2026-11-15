@@ -215,6 +215,9 @@ SIMPLE_JWT = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Email backend
 # ─────────────────────────────────────────────────────────────────────────────
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "").strip()
+EMAIL_TIMEOUT = 10
 if os.getenv("EMAIL_HOST"):
     EMAIL_BACKEND  = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_HOST     = os.getenv("EMAIL_HOST", "smtp.gmail.com")

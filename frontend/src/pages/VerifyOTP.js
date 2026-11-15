@@ -8,11 +8,12 @@ function VerifyOTP() {
   const location  = useLocation();
 
   // Pre-filled from ForgotPassword navigation state
-  const { identifier: preIdentifier = "", method = "" } = location.state || {};
+  const { identifier: preIdentifier = "", method = "", deliveryMessage } = location.state || {};
 
   const [identifier, setIdentifier] = useState(preIdentifier);
   const [digits, setDigits]         = useState(Array(6).fill(""));
   const [loading, setLoading]       = useState(false);
+  const [resending, setResending]   = useState(false);
   const [message, setMessage]       = useState(null);
   const inputRefs                   = useRef([]);
 
@@ -74,18 +75,20 @@ function VerifyOTP() {
 
   // ── Resend OTP ─────────────────────────────────────────────────────────
   const resendOTP = async () => {
-    if (!identifier) return;
+    if (!identifier || resending) return;
     setMessage(null);
+    setResending(true);
 
     try {
       const res = await api.post("forgot-password/", {
         identifier,
         method: method || "email",
       });
-      const hint = res.data.otp_code ? ` (Dev: ${res.data.otp_code})` : "";
-      setMessage({ type: "success", text: "New OTP sent!" + hint });
+      setMessage({ type: "", text: res.data.message });
     } catch {
       setMessage({ type: "error", text: "Failed to resend OTP." });
+    } finally {
+      setResending(false);
     }
   };
 
@@ -95,12 +98,12 @@ function VerifyOTP() {
         <div className="auth-logo">🔢</div>
         <h1 className="auth-title">Enter OTP</h1>
         <p className="auth-subtitle">
-          Enter the 6-digit code sent to your{" "}
-          {method ? method.replace(/_/g, " ") : "registered contact"}
+          Enter the 6-digit code you receive by {["phone", "recovery_phone"].includes(method) ? "SMS" : "email"}.
         </p>
+        {deliveryMessage && !message && <p className="auth-field-note">{deliveryMessage}</p>}
 
         {message && (
-          <div className={`auth-message ${message.type}`}>
+          <div className={`auth-message ${message.type}`} role={message.type === "error" ? "alert" : "status"}>
             {message.text}
           </div>
         )}
@@ -149,9 +152,10 @@ function VerifyOTP() {
           Didn't receive it?{" "}
           <button
             onClick={resendOTP}
+            disabled={resending}
             style={{ background: "none", border: "none", color: "#2563eb", fontWeight: "600", cursor: "pointer", fontSize: "14px", padding: 0 }}
           >
-            Resend OTP
+            {resending ? "Requesting code…" : "Resend OTP"}
           </button>
         </div>
 

@@ -49,7 +49,7 @@ function ResetPassword() {
 
       setMessage({ type: "success", text: res.data.message + " Redirecting to login..." });
 
-      setTimeout(() => navigate("/"), 2500);
+      setTimeout(() => navigate("/login"), 2500);
     } catch (err) {
       const data = err.response?.data;
       const msg =
@@ -136,7 +136,7 @@ function ResetPassword() {
         </form>
 
         <div className="auth-footer">
-          <Link to="/">← Back to Login</Link>
+          <Link to="/login">← Back to Login</Link>
         </div>
       </div>
     </div>

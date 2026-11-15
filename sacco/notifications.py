@@ -4,6 +4,8 @@ Handles Email (Django SMTP) and SMS (Africa's Talking). OTP delivery never
 falls back to console or in-memory output and reports provider acceptance only.
 """
 import logging
+
+import requests
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -45,6 +47,27 @@ def _send_email(to_email: str, subject: str, body: str, html_body: str = None):
         return {"status": "accepted", "reason_code": ""}
     except Exception as e:
         logger.error("Email notification failed (%s)", type(e).__name__)
+        return {"status": "failed", "reason_code": "provider_error"}
+
+
+def _send_otp_email(address, message):
+    subject = "SACCO — Your OTP Code"
+    if not settings.RESEND_API_KEY:
+        return _send_email(address, subject, message)
+    if not address or not settings.RESEND_FROM_EMAIL:
+        return {"status": "unavailable", "reason_code": "email_sender_or_recipient_missing"}
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+            json={"from": settings.RESEND_FROM_EMAIL, "to": [address], "subject": subject, "text": message},
+            timeout=10,
+            allow_redirects=False,
+        )
+        if 200 <= response.status_code < 300 and response.json().get("id"):
+            return {"status": "accepted", "reason_code": ""}
+        return {"status": "failed", "reason_code": "provider_rejected"}
+    except (requests.RequestException, ValueError, AttributeError):
         return {"status": "failed", "reason_code": "provider_error"}
 
 
@@ -90,11 +113,14 @@ def send_otp(user, otp_code: str, method: str):
     """Deliver OTP via the chosen method."""
     msg = f"Your SACCO OTP is: {otp_code}. Valid for 10 minutes. Do not share this code."
 
+    if method in ("phone", "recovery_phone") and not settings.DEBUG and settings.AT_USERNAME.lower() == "sandbox":
+        return {"status": "unavailable", "reason_code": "sms_sandbox_not_live"}
+
     if method == "email":
-        return _send_email(user.email, "SACCO — Your OTP Code", msg)
+        return _send_otp_email(user.email, msg)
 
     elif method == "recovery_email":
-        return _send_email(user.recovery_email, "SACCO — Your OTP Code", msg)
+        return _send_otp_email(user.recovery_email, msg)
 
     elif method == "phone":
         phone = getattr(getattr(user, "member_profile", None), "phone_number", "")

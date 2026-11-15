@@ -17,19 +17,8 @@ function ForgotPassword() {
     setLoading(true);
 
     try {
-      const res = await api.post("forgot-password/", { identifier, method });
-
-      // In dev mode the API returns the OTP code directly
-      const otpHint = res.data.otp_code
-        ? ` (Dev mode — your OTP is: ${res.data.otp_code})`
-        : "";
-
-      setMessage({ type: "success", text: res.data.message + otpHint });
-
-      // Move to verify page after 2 s
-      setTimeout(() => {
-        navigate("/verify-otp", { state: { identifier, method } });
-      }, 2000);
+      const { data } = await api.post("forgot-password/", { identifier, method });
+      navigate("/verify-otp", { state: { identifier, method, deliveryMessage: data.message } });
     } catch (err) {
       const data = err.response?.data;
       setMessage({ type: "error", text: data?.error || "Request failed. Please try again." });
@@ -39,10 +28,10 @@ function ForgotPassword() {
   };
 
   const methodLabels = {
-    email:          "📧 Primary Email",
-    recovery_email: "📧 Recovery Email",
-    phone:          "📱 Phone Number (SMS)",
-    recovery_phone: "📱 Recovery Phone (SMS)",
+    email:          "Registered email",
+    recovery_email: "Recovery email, if verified",
+    phone:          "Registered phone (SMS)",
+    recovery_phone: "Recovery phone (SMS), if verified",
   };
 
   return (
@@ -62,8 +51,9 @@ function ForgotPassword() {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div>
-            <label>Username or Email</label>
+            <label htmlFor="recovery-identifier">Username or registered email</label>
             <input
+              id="recovery-identifier"
               type="text"
               placeholder="Enter your username or email"
               value={identifier}
@@ -74,8 +64,9 @@ function ForgotPassword() {
           </div>
 
           <div>
-            <label>Send OTP via</label>
+            <label htmlFor="recovery-method">Send code via</label>
             <select
+              id="recovery-method"
               value={method}
               onChange={(e) => setMethod(e.target.value)}
             >
@@ -85,9 +76,11 @@ function ForgotPassword() {
             </select>
           </div>
 
-          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>
-            Make sure you registered a {methodLabels[method].replace(/^.+? /, "")} to use this option.
-          </p>
+          {(method === "recovery_email" || method === "recovery_phone") && (
+            <p className="auth-field-note">
+              If you haven't verified a recovery contact, we'll use your registered {method === "recovery_email" ? "email" : "phone"}.
+            </p>
+          )}
 
           <button className="auth-button" type="submit" disabled={loading}>
             {loading ? "Sending OTP..." : "Send OTP →"}
@@ -95,7 +88,7 @@ function ForgotPassword() {
         </form>
 
         <div className="auth-footer">
-          <Link to="/">← Back to Login</Link>
+          <Link to="/login">← Back to Login</Link>
         </div>
       </div>
     </div>
