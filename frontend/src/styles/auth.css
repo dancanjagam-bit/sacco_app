@@ -139,6 +139,39 @@
   box-shadow: inset 0 0 0 100px var(--surface-muted);
 }
 
+/* Keep registration controls legible when the browser forces page colors. */
+.registration-form :is(input:not([type="checkbox"]), select, textarea) {
+  color-scheme: only light;
+  color: #0f172a;
+  background-color: #fff;
+  -webkit-text-fill-color: currentColor;
+  caret-color: currentColor;
+}
+
+.registration-form :is(input, textarea)::placeholder {
+  color: #475569;
+  -webkit-text-fill-color: currentColor;
+}
+
+.registration-form input:-webkit-autofill {
+  box-shadow: inset 0 0 0 100px #fff;
+}
+
+.registration-form :is(input:not([type="checkbox"]), select, textarea):disabled {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+.registration-form input:disabled:-webkit-autofill {
+  box-shadow: inset 0 0 0 100px #f1f5f9;
+}
+
+@media (forced-colors: active) {
+  .registration-form input:-webkit-autofill {
+    box-shadow: none;
+  }
+}
+
 .auth-required,
 .auth-field-error { color: var(--danger-text); }
 

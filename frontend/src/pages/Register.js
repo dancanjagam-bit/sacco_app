@@ -218,7 +218,7 @@ export default function Register() {
             {idStatus && <p>Identity documents: <VerificationStatusBadge status={idStatus} /></p>}
             <button type="button" className="auth-button" disabled>Registration complete</button>
           </div>
-        ) : <div className="auth-form">
+        ) : <div className="auth-form registration-form">
 
           {/* ── STEP 1 ── */}
           {step === 1 && (
