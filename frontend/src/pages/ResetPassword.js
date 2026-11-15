@@ -101,7 +101,7 @@ function ResetPassword() {
                 ["letter",  "Contains a letter"],
                 ["number",  "Contains a number"],
               ].map(([key, label]) => (
-                <span key={key} style={{ color: checks[key] ? "#16a34a" : "#94a3b8" }}>
+                <span key={key} style={{ color: checks[key] ? "var(--success-text)" : "var(--text-muted)" }}>
                   {checks[key] ? "✅" : "○"} {label}
                 </span>
               ))}
@@ -121,7 +121,7 @@ function ResetPassword() {
           </div>
 
           {form.confirm_password.length > 0 && (
-            <span style={{ fontSize: "13px", color: checks.match ? "#16a34a" : "#dc2626" }}>
+            <span style={{ fontSize: "13px", color: checks.match ? "var(--success-text)" : "var(--danger-text)" }}>
               {checks.match ? "✅ Passwords match" : "⚠️ Passwords do not match"}
             </span>
           )}

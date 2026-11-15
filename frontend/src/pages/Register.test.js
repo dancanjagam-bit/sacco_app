@@ -51,6 +51,51 @@ function enterSecurityDetails(container) {
 
 beforeEach(() => jest.clearAllMocks());
 
+test("registration fields use shared colors in both normal and invalid states", () => {
+  renderRegistration();
+  const name = screen.getByRole("textbox", { name: "First Name" });
+  const email = screen.getByRole("textbox", { name: "Email Address" });
+  const gender = screen.getByRole("combobox", { name: "Gender" });
+  const birthDate = screen.getByLabelText(/Date of Birth/);
+
+  fireEvent.change(email, { target: { value: "unfinished" } });
+  fireEvent.change(gender, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: /Next: Contact Info/ }));
+
+  for (const control of [name, email, gender, birthDate]) {
+    expect(control).not.toHaveAttribute("style");
+    expect(control).toHaveAttribute("aria-invalid", "true");
+  }
+  expect(email).toHaveValue("unfinished");
+  expect(email).toHaveAccessibleDescription("Enter a valid email address.");
+  fireEvent.change(email, { target: { value: "applicant@example.invalid" } });
+  expect(email).not.toHaveAttribute("aria-invalid");
+});
+
+test("password visibility controls preserve both values and remask independently", () => {
+  const { container } = renderRegistration();
+  enterPersonalDetails(container);
+  enterContactDetails(container);
+  fireEvent.click(screen.getByRole("button", { name: /Next: Set Password/ }));
+  enterSecurityDetails(container);
+
+  const password = screen.getByLabelText(/^Password(?: \*)?$/i, { selector: "input" });
+  const confirmation = screen.getByLabelText(/^Confirm Password(?: \*)?$/i, { selector: "input" });
+  expect(password).toHaveAttribute("type", "password");
+  expect(confirmation).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+  expect(password).toHaveAttribute("type", "text");
+  expect(password).toHaveValue("Strongpass1");
+  expect(confirmation).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Show password confirmation" }));
+  expect(confirmation).toHaveAttribute("type", "text");
+  expect(confirmation).toHaveValue("Strongpass1");
+  fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+  fireEvent.click(screen.getByRole("button", { name: "Hide password confirmation" }));
+  expect(password).toHaveAttribute("type", "password");
+  expect(confirmation).toHaveAttribute("type", "password");
+});
+
 test("successful signup submits consent and enters the success state", async () => {
   api.post.mockResolvedValueOnce({ data: { member_number: "SACCO000001", id_status: "draft" } });
   const { container } = renderRegistration();

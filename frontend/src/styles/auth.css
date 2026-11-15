@@ -55,7 +55,7 @@
 }
 
 .auth-subtitle {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 14px;
   margin: 0;
   font-weight: 400;
@@ -79,7 +79,7 @@
   display: block;
   font-size: 14px;
   font-weight: 650;
-  color: #475569;
+  color: var(--text-muted);
   text-transform: none;
   letter-spacing: 0;
   margin-bottom: 6px;
@@ -90,7 +90,7 @@
 .auth-form textarea {
   width: 100%;
   padding: 13px 16px;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--control-border);
   border-radius: 12px;
   font-size: 16px;
   font-family: inherit;
@@ -103,13 +103,52 @@
 .auth-form input:focus,
 .auth-form select:focus,
 .auth-form textarea:focus {
-  outline: none;
-  border-color: var(--focus, #1d4ed8);
-  background: #fff;
-  box-shadow: var(--focus-ring, 0 0 0 3px rgb(29 78 216 / 28%));
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.auth-form input::placeholder { color: #cbd5e1; }
+.auth-form :is(input, select, textarea):hover:not(:disabled):not([aria-invalid="true"]) {
+  border-color: var(--text-muted);
+}
+
+.auth-form :is(input, textarea)::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Chromium and Safari apply a browser-controlled background to autofilled fields. */
+.auth-form input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: inset 0 0 0 100px var(--surface);
+  caret-color: var(--text);
+}
+
+.auth-form :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--danger-text);
+}
+
+.auth-form :is(input, select, textarea):disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.auth-form input:disabled:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-muted);
+  box-shadow: inset 0 0 0 100px var(--surface-muted);
+}
+
+.auth-required,
+.auth-field-error { color: var(--danger-text); }
+
+.auth-field-error,
+.auth-field-note { margin: 4px 0 0; font-size: 0.875rem; }
+.auth-field-note { color: var(--text-muted); }
+.auth-form .id-document-upload .text-danger { color: var(--danger-text); }
+.auth-form .id-document-upload .text-muted { color: var(--text-muted); }
+
+.auth-form input[autocomplete="new-password"].auth-input-with-icon { padding-right: 60px; }
 .auth-form textarea            { resize: vertical; min-height: 80px; }
 
 .auth-input-wrap {
@@ -133,7 +172,8 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  background: #f1f5f9;
+  background: var(--surface-muted);
+  color: var(--text);
   border: none;
   border-radius: 8px;
   width: 44px;
@@ -145,7 +185,7 @@
   font-size: 16px;
   transition: background-color var(--duration-fast, 120ms) var(--ease, ease);
 }
-.auth-toggle-pw:hover { background: var(--navy-200, #e2e8f0); }
+.auth-toggle-pw:hover { background: var(--neutral-border); }
 .auth-toggle-pw:focus-visible { outline: 3px solid var(--focus, #1d4ed8); outline-offset: 2px; }
 
 /* ── Button ── */
@@ -154,7 +194,7 @@
   border: none;
   border-radius: 14px;
   background: var(--action, #0f4c81);
-  color: #fff;
+  color: var(--on-action);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -247,8 +287,8 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.auth-message.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-.auth-message.error   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.auth-message.success { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
+.auth-message.error   { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
 
 /* ── Footer ── */
 .auth-footer {
@@ -273,28 +313,20 @@
 /* ── OTP boxes ── */
 .auth-otp-grid {
   display: flex;
-  gap: 10px;
+  gap: clamp(4px, 2vw, 10px);
   justify-content: center;
   margin: 8px 0;
 }
 
-.auth-otp-box {
-  width: clamp(38px, 12vw, 50px); height: clamp(48px, 15vw, 58px);
+.auth-form .auth-otp-box {
+  width: 48px;
+  height: 56px;
+  min-width: 0;
+  padding: 0;
   text-align: center;
   font-size: 24px;
   font-weight: 700;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  outline: none;
-  background: #f8faff;
-  transition: border-color var(--duration-fast, 120ms) var(--ease, ease), background-color var(--duration-fast, 120ms) var(--ease, ease), box-shadow var(--duration-fast, 120ms) var(--ease, ease);
-  color: #0f172a;
-}
-
-.auth-otp-box:focus {
-  border-color: var(--focus, #1d4ed8);
-  background: var(--blue-50, #eff6ff);
-  box-shadow: var(--focus-ring, 0 0 0 3px rgb(29 78 216 / 28%));
+  border-width: 2px;
 }
 
 .auth-security-notice {

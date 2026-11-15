@@ -21,33 +21,11 @@ const MAX_DOB = new Date(Date.now() - 18 * 365.25 * 24 * 3600 * 1000)
   .toISOString()
   .split("T")[0];
 
-// Reusable label + error helper — a plain function, NOT a component
-function labelStyle() {
+function fieldAccessibility(name, error) {
   return {
-    display: "block",
-    fontSize: "12px",
-    fontWeight: "700",
-    color: "#475569",
-    textTransform: "uppercase",
-    letterSpacing: ".4px",
-    marginBottom: "5px",
-  };
-}
-function errStyle() {
-  return { margin: "4px 0 0", fontSize: "12px", color: "#dc2626" };
-}
-function inputStyle(hasError) {
-  return {
-    width: "100%",
-    padding: "11px 14px",
-    border: `1.5px solid ${hasError ? "#fca5a5" : "#e2e8f0"}`,
-    borderRadius: "10px",
-    fontSize: "15px",
-    fontFamily: "inherit",
-    background: hasError ? "#fef2f2" : "#f8fafc",
-    boxSizing: "border-box",
-    outline: "none",
-    transition: "border-color .15s",
+    id: `registration-${name}`,
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? `registration-${name}-error` : undefined,
   };
 }
 
@@ -219,7 +197,7 @@ export default function Register() {
             </div>
           ))}
         </div>
-        <p style={{ textAlign: "center", fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
+        <p style={{ textAlign: "center", fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
           {step === 1 ? "Personal Information" : step === 2 ? "Contact & Location" : "Account Security"}
         </p>
 
@@ -229,7 +207,7 @@ export default function Register() {
 
         {idStatus && (
           <div style={{ textAlign: "center", marginTop: "8px" }}>
-            <span style={{ fontSize: "13px", color: "#64748b" }}>ID Verification: </span>
+            <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>ID Verification: </span>
             <VerificationStatusBadge status={idStatus} />
           </div>
         )}
@@ -247,38 +225,38 @@ export default function Register() {
             <>
               <div className="auth-row">
                 <div>
-                  <label style={labelStyle()}>First Name <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input style={inputStyle(errors.first_name)} name="first_name" value={form.first_name} onChange={set("first_name")} placeholder="e.g. Ben" />
-                  {errors.first_name && <p style={errStyle()}>{errors.first_name}</p>}
+                  <label htmlFor="registration-first_name">First Name <span className="auth-required" aria-hidden="true">*</span></label>
+                  <input {...fieldAccessibility("first_name", errors.first_name)} name="first_name" value={form.first_name} onChange={set("first_name")} placeholder="e.g. Ben" />
+                  {errors.first_name && <p className="auth-field-error" id="registration-first_name-error">{errors.first_name}</p>}
                 </div>
                 <div>
-                  <label style={labelStyle()}>Last Name <span style={{ color: "#dc2626" }}>*</span></label>
-                  <input style={inputStyle(errors.last_name)} name="last_name" value={form.last_name} onChange={set("last_name")} placeholder="e.g. Oduor" />
-                  {errors.last_name && <p style={errStyle()}>{errors.last_name}</p>}
+                  <label htmlFor="registration-last_name">Last Name <span className="auth-required" aria-hidden="true">*</span></label>
+                  <input {...fieldAccessibility("last_name", errors.last_name)} name="last_name" value={form.last_name} onChange={set("last_name")} placeholder="e.g. Oduor" />
+                  {errors.last_name && <p className="auth-field-error" id="registration-last_name-error">{errors.last_name}</p>}
                 </div>
               </div>
 
               <div>
-                <label style={labelStyle()}>Email Address <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.email)} type="email" name="email" value={form.email} onChange={set("email")} placeholder="yourname@example.com" />
-                {errors.email && <p style={errStyle()}>{errors.email}</p>}
+                <label htmlFor="registration-email">Email Address <span className="auth-required" aria-hidden="true">*</span></label>
+                <input {...fieldAccessibility("email", errors.email)} type="email" name="email" value={form.email} onChange={set("email")} placeholder="yourname@example.com" />
+                {errors.email && <p className="auth-field-error" id="registration-email-error">{errors.email}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Gender <span style={{ color: "#dc2626" }}>*</span></label>
-                <select style={inputStyle(errors.gender)} name="gender" value={form.gender} onChange={set("gender")}>
+                <label htmlFor="registration-gender">Gender <span className="auth-required" aria-hidden="true">*</span></label>
+                <select {...fieldAccessibility("gender", errors.gender)} name="gender" value={form.gender} onChange={set("gender")}>
                   <option value="">— Select gender —</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="other">Other</option>
                 </select>
-                {errors.gender && <p style={errStyle()}>{errors.gender}</p>}
+                {errors.gender && <p className="auth-field-error" id="registration-gender-error">{errors.gender}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Date of Birth (must be 18+) <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.date_of_birth)} type="date" name="date_of_birth" value={form.date_of_birth} onChange={set("date_of_birth")} min="1924-01-01" max={MAX_DOB} />
-                {errors.date_of_birth && <p style={errStyle()}>{errors.date_of_birth}</p>}
+                <label htmlFor="registration-date_of_birth">Date of Birth (must be 18+) <span className="auth-required" aria-hidden="true">*</span></label>
+                <input {...fieldAccessibility("date_of_birth", errors.date_of_birth)} type="date" name="date_of_birth" value={form.date_of_birth} onChange={set("date_of_birth")} min="1924-01-01" max={MAX_DOB} />
+                {errors.date_of_birth && <p className="auth-field-error" id="registration-date_of_birth-error">{errors.date_of_birth}</p>}
               </div>
 
               <button type="button" className="auth-button" onClick={nextStep}>
@@ -291,68 +269,68 @@ export default function Register() {
           {step === 2 && (
             <>
               <div>
-                <label style={labelStyle()}>National ID Number <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.national_id)} name="national_id" value={form.national_id} onChange={set("national_id")} placeholder="e.g. 28750187" maxLength={8} />
-                {errors.national_id && <p style={errStyle()}>{errors.national_id}</p>}
+                <label htmlFor="registration-national_id">National ID Number <span className="auth-required" aria-hidden="true">*</span></label>
+                <input {...fieldAccessibility("national_id", errors.national_id)} name="national_id" value={form.national_id} onChange={set("national_id")} placeholder="e.g. 28750187" maxLength={8} />
+                {errors.national_id && <p className="auth-field-error" id="registration-national_id-error">{errors.national_id}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Phone Number <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.phone_number)} name="phone_number" value={form.phone_number} onChange={set("phone_number")} placeholder="e.g. 0722 000 000" />
-                {errors.phone_number && <p style={errStyle()}>{errors.phone_number}</p>}
+                <label htmlFor="registration-phone_number">Phone Number <span className="auth-required" aria-hidden="true">*</span></label>
+                <input {...fieldAccessibility("phone_number", errors.phone_number)} name="phone_number" value={form.phone_number} onChange={set("phone_number")} placeholder="e.g. 0722 000 000" />
+                {errors.phone_number && <p className="auth-field-error" id="registration-phone_number-error">{errors.phone_number}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>County (Kenya) <span style={{ color: "#dc2626" }}>*</span></label>
-                <select style={inputStyle(errors.county)} name="county" value={form.county} onChange={set("county")}>
+                <label htmlFor="registration-county">County (Kenya) <span className="auth-required" aria-hidden="true">*</span></label>
+                <select {...fieldAccessibility("county", errors.county)} name="county" value={form.county} onChange={set("county")}>
                   <option value="">— Select county —</option>
                   {COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                {errors.county && <p style={errStyle()}>{errors.county}</p>}
+                {errors.county && <p className="auth-field-error" id="registration-county-error">{errors.county}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Physical Address <span style={{ color: "#dc2626" }}>*</span></label>
-                <textarea style={{ ...inputStyle(errors.address), resize: "vertical", minHeight: "70px" }} name="address" value={form.address} onChange={set("address")} placeholder="e.g. P.O. Box 123, Kisumu" />
-                {errors.address && <p style={errStyle()}>{errors.address}</p>}
+                <label htmlFor="registration-address">Physical Address <span className="auth-required" aria-hidden="true">*</span></label>
+                <textarea {...fieldAccessibility("address", errors.address)} name="address" value={form.address} onChange={set("address")} placeholder="e.g. P.O. Box 123, Kisumu" />
+                {errors.address && <p className="auth-field-error" id="registration-address-error">{errors.address}</p>}
               </div>
 
-              <p style={{ fontSize: "11px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".5px", margin: "4px 0 0" }}>
+              <p style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".5px", margin: "4px 0 0" }}>
                 Recovery Contacts (Optional)
               </p>
-              <p style={{ fontSize: "12px", color: "#94a3b8", margin: "2px 0 4px" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 4px" }}>
                 Used to recover your account if you forget your password.
               </p>
 
               <div>
-                <label style={labelStyle()}>Recovery Email</label>
-                <input style={inputStyle(errors.recovery_email)} type="email" name="recovery_email" value={form.recovery_email} onChange={set("recovery_email")} placeholder="backup@example.com" />
-                {errors.recovery_email && <p style={errStyle()}>{errors.recovery_email}</p>}
+                <label htmlFor="registration-recovery_email">Recovery Email</label>
+                <input {...fieldAccessibility("recovery_email", errors.recovery_email)} type="email" name="recovery_email" value={form.recovery_email} onChange={set("recovery_email")} placeholder="backup@example.com" />
+                {errors.recovery_email && <p className="auth-field-error" id="registration-recovery_email-error">{errors.recovery_email}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Recovery Phone</label>
-                <input style={inputStyle(errors.recovery_phone)} name="recovery_phone" value={form.recovery_phone} onChange={set("recovery_phone")} placeholder="e.g. 0733 000 000" />
-                {errors.recovery_phone && <p style={errStyle()}>{errors.recovery_phone}</p>}
+                <label htmlFor="registration-recovery_phone">Recovery Phone</label>
+                <input {...fieldAccessibility("recovery_phone", errors.recovery_phone)} name="recovery_phone" value={form.recovery_phone} onChange={set("recovery_phone")} placeholder="e.g. 0733 000 000" />
+                {errors.recovery_phone && <p className="auth-field-error" id="registration-recovery_phone-error">{errors.recovery_phone}</p>}
               </div>
 
               <div style={{ marginTop: "12px" }}>
                 <IDDocumentUpload onChange={setIdDocument} selectedFile={idDocument} disabled={loading} error={errors.id_document_front || errors.id_document} />
               </div>
               <div style={{ marginTop: "12px" }} className="auth-document-back">
-                <label style={labelStyle()} htmlFor="id-document-back-input">National ID back (optional)</label>
+                <label htmlFor="id-document-back-input">National ID back (optional)</label>
                 <input id="id-document-back-input" type="file" accept="image/jpeg,image/png,image/gif,application/pdf" disabled={loading}
-                  aria-invalid={Boolean(errors.id_document_back)} onChange={e => setIdDocumentBack(e.target.files?.[0] || null)} />
-                {idDocumentBack && <p style={errStyle()}>{idDocumentBack.name} is selected for submission.</p>}
-                {errors.id_document_back && <p style={errStyle()}>{errors.id_document_back}</p>}
+                  aria-invalid={Boolean(errors.id_document_back)} aria-describedby={errors.id_document_back ? "registration-id_document_back-error" : undefined} onChange={e => setIdDocumentBack(e.target.files?.[0] || null)} />
+                {idDocumentBack && <p className="auth-field-note">{idDocumentBack.name} is selected for submission.</p>}
+                {errors.id_document_back && <p className="auth-field-error" id="registration-id_document_back-error">{errors.id_document_back}</p>}
               </div>
               <label className="auth-kyc-consent">
                 <input type="checkbox" checked={idVerificationConsent} disabled={loading}
-                  aria-invalid={Boolean(errors.id_verification_consent)}
+                  aria-invalid={Boolean(errors.id_verification_consent)} aria-describedby={errors.id_verification_consent ? "registration-id_verification_consent-error" : undefined}
                   onChange={e => { setIdVerificationConsent(e.target.checked); setErrors(prev => ({ ...prev, id_verification_consent: null })); }} />
                 <span>I authorize secure storage of any identity documents I upload for membership review. OCR is advisory; no government database match, selfie match, or liveness check is performed.</span>
               </label>
-              {errors.id_verification_consent && <p style={errStyle()}>{errors.id_verification_consent}</p>}
+              {errors.id_verification_consent && <p className="auth-field-error" id="registration-id_verification_consent-error">{errors.id_verification_consent}</p>}
               <p className="auth-kyc-note">You may continue without documents and submit them later from Identity verification.</p>
               <div className="auth-kyc-status">
                 <Icon name="shield" size={18} />
@@ -374,43 +352,43 @@ export default function Register() {
           {step === 3 && (
             <>
               <div>
-                <label style={labelStyle()}>Username <span style={{ color: "#dc2626" }}>*</span></label>
-                <input style={inputStyle(errors.username)} name="username" value={form.username} onChange={set("username")} placeholder="e.g. benoduor" autoComplete="username" />
-                {errors.username && <p style={errStyle()}>{errors.username}</p>}
+                <label htmlFor="registration-username">Username <span className="auth-required" aria-hidden="true">*</span></label>
+                <input {...fieldAccessibility("username", errors.username)} name="username" value={form.username} onChange={set("username")} placeholder="e.g. benoduor" autoComplete="username" />
+                {errors.username && <p className="auth-field-error" id="registration-username-error">{errors.username}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Password <span style={{ color: "#dc2626" }}>*</span></label>
+                <label htmlFor="registration-password">Password <span className="auth-required" aria-hidden="true">*</span></label>
                 <div className="auth-input-wrap">
                   <span className="auth-input-icon">🔒</span>
-                  <input style={inputStyle(errors.password)} type={showPw ? "text" : "password"} name="password" value={form.password} onChange={set("password")} placeholder="At least 8 characters" autoComplete="new-password" className="auth-input-with-icon" />
-                  <button type="button" onClick={() => setShowPw(!showPw)} className="auth-toggle-pw" tabIndex={-1}>{showPw ? "🙈" : "👁️"}</button>
+                  <input {...fieldAccessibility("password", errors.password)} type={showPw ? "text" : "password"} name="password" value={form.password} onChange={set("password")} placeholder="At least 8 characters" autoComplete="new-password" className="auth-input-with-icon" />
+                  <button type="button" onClick={() => setShowPw(!showPw)} className="auth-toggle-pw" aria-controls="registration-password" aria-label={showPw ? "Hide password" : "Show password"}>{showPw ? "🙈" : "👁️"}</button>
                 </div>
                 {pw.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "3px", marginTop: "6px", fontSize: "12px" }}>
                     {[["length", "8+ characters"], ["letter", "Contains a letter"], ["number", "Contains a number"]].map(([k, l]) => (
-                      <span key={k} style={{ color: pwOk[k] ? "#16a34a" : "#94a3b8" }}>
+                      <span key={k} style={{ color: pwOk[k] ? "var(--success-text)" : "var(--text-muted)" }}>
                         {pwOk[k] ? "✅" : "○"} {l}
                       </span>
                     ))}
                   </div>
                 )}
-                {errors.password && <p style={errStyle()}>{errors.password}</p>}
+                {errors.password && <p className="auth-field-error" id="registration-password-error">{errors.password}</p>}
               </div>
 
               <div>
-                <label style={labelStyle()}>Confirm Password <span style={{ color: "#dc2626" }}>*</span></label>
+                <label htmlFor="registration-confirm_password">Confirm Password <span className="auth-required" aria-hidden="true">*</span></label>
                 <div className="auth-input-wrap">
                   <span className="auth-input-icon">🔒</span>
-                  <input style={inputStyle(errors.confirm_password)} type={showConf ? "text" : "password"} name="confirm_password" value={form.confirm_password} onChange={set("confirm_password")} placeholder="Repeat password" autoComplete="new-password" className="auth-input-with-icon" />
-                  <button type="button" onClick={() => setShowConf(!showConf)} className="auth-toggle-pw" tabIndex={-1}>{showConf ? "🙈" : "👁️"}</button>
+                  <input {...fieldAccessibility("confirm_password", errors.confirm_password)} type={showConf ? "text" : "password"} name="confirm_password" value={form.confirm_password} onChange={set("confirm_password")} placeholder="Repeat password" autoComplete="new-password" className="auth-input-with-icon" />
+                  <button type="button" onClick={() => setShowConf(!showConf)} className="auth-toggle-pw" aria-controls="registration-confirm_password" aria-label={showConf ? "Hide password confirmation" : "Show password confirmation"}>{showConf ? "🙈" : "👁️"}</button>
                 </div>
                 {form.confirm_password.length > 0 && (
-                  <span style={{ fontSize: "12px", marginTop: "4px", display: "block", color: form.password === form.confirm_password ? "#16a34a" : "#dc2626" }}>
+                  <span style={{ fontSize: "12px", marginTop: "4px", display: "block", color: form.password === form.confirm_password ? "var(--success-text)" : "var(--danger-text)" }}>
                     {form.password === form.confirm_password ? "✅ Passwords match" : "⚠️ Passwords do not match"}
                   </span>
                 )}
-                {errors.confirm_password && <p style={errStyle()}>{errors.confirm_password}</p>}
+                {errors.confirm_password && <p className="auth-field-error" id="registration-confirm_password-error">{errors.confirm_password}</p>}
               </div>
 
               <div style={{ display: "flex", gap: "10px" }}>

@@ -121,12 +121,7 @@ function VerifyOTP() {
           )}
 
           {/* 6-digit OTP boxes */}
-          <div style={{
-            display: "flex",
-            gap: "10px",
-            justifyContent: "center",
-            margin: "8px 0",
-          }}>
+          <div className="auth-otp-grid">
             {digits.map((d, i) => (
               <input
                 key={i}
@@ -138,18 +133,8 @@ function VerifyOTP() {
                 onChange={(e) => handleDigit(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
                 onPaste={i === 0 ? handlePaste : undefined}
-                style={{
-                  width: "48px",
-                  height: "56px",
-                  textAlign: "center",
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  border: `2px solid ${d ? "#2563eb" : "#e2e8f0"}`,
-                  borderRadius: "10px",
-                  outline: "none",
-                  background: d ? "#eff6ff" : "#f8fafc",
-                  transition: "border-color .15s",
-                }}
+                className="auth-otp-box"
+                aria-label={`Verification code digit ${i + 1}`}
                 autoFocus={i === 0}
               />
             ))}
