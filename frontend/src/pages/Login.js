@@ -21,7 +21,6 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0);
   const [resending, setResending] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
 
@@ -61,11 +60,15 @@ function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    // Browser autofill can update the input without a React change event.
+    const credentials = new FormData(e.currentTarget);
+    const submittedUsername = credentials.get("username").trim();
+    const submittedPassword = credentials.get("password");
     setMessage("");
     setLoading(true);
 
     try {
-      const res = await authApi.post("token/", { username, password });
+      const res = await authApi.post("token/", { username: submittedUsername, password: submittedPassword });
 
       if (res.data.requires_2fa) {
         enterTwoFactor(res.data);
@@ -73,7 +76,7 @@ function Login() {
         return;
       }
 
-      await storeTokensAndNavigate(res.data);
+      await storeTokensAndNavigate(res.data, submittedUsername);
     } catch (err) {
       handleLoginError(err);
     } finally {
@@ -90,7 +93,7 @@ function Login() {
         identifier: twoFaInfo.identifier,
         code: otp,
       });
-      await storeTokensAndNavigate(res.data);
+      await storeTokensAndNavigate(res.data, twoFaInfo.identifier);
     } catch (err) {
       const data = err.response?.data;
       if (err.response?.status === 429) {
@@ -140,7 +143,7 @@ function Login() {
     setMessage("");
   };
 
-  const storeTokensAndNavigate = async (tokenData) => {
+  const storeTokensAndNavigate = async (tokenData, signedInUsername) => {
     const tokenStore = rememberMe ? localStorage : sessionStorage;
     const otherStore = rememberMe ? sessionStorage : localStorage;
     if (rememberMe) localStorage.setItem("sacco_remember_session", "true");
@@ -150,7 +153,7 @@ function Login() {
     tokenStore.setItem("access", tokenData.access);
     tokenStore.setItem("refresh", tokenData.refresh);
 
-    if (rememberMe) localStorage.setItem("sacco_remember_username", username);
+    if (rememberMe) localStorage.setItem("sacco_remember_username", signedInUsername);
     else localStorage.removeItem("sacco_remember_username");
 
     const authenticatedUser = await refreshUser();
@@ -165,14 +168,12 @@ function Login() {
   };
 
   const handleLoginError = (err) => {
-    setAttempts((prev) => prev + 1);
-    if (err.response?.status === 401 || err.response?.status === 400) {
-      const msgs = [
-        "Invalid username or password.",
-        "Incorrect credentials. Please try again.",
-        "Login failed. Check your username and password.",
-      ];
-      setMessage(msgs[Math.min(attempts, msgs.length - 1)]);
+    if (err.response?.status === 401) {
+      setMessage(err.response.data?.detail === "Account is disabled."
+        ? "This account is disabled. Contact SACCO support."
+        : "Sign-in failed. Check your username and password, or use Forgot password.");
+    } else if (err.response?.status === 400) {
+      setMessage("Enter your username and password.");
     } else if (err.response?.status === 429) {
       setMessage("Too many attempts. Please wait before trying again.");
     } else if (err.code === "ERR_NETWORK") {
@@ -205,6 +206,7 @@ function Login() {
                 <span className="auth-input-icon"><Icon name="user" size={17} /></span>
                 <input
                   id="username"
+                  name="username"
                   type="text"
                   placeholder="Enter your username"
                   value={username}
@@ -224,6 +226,7 @@ function Login() {
                 <span className="auth-input-icon"><Icon name="lock" size={17} /></span>
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={password}

@@ -59,6 +59,22 @@ test("member login loads one profile and opens the member dashboard", async () =
   expect(sessionStorage.getItem("access")).toBe("member-access");
 });
 
+test("sign-in submits the visible values even when autofill does not dispatch a change event", async () => {
+  authApi.post.mockRejectedValueOnce({ response: { status: 401 } });
+  renderLogin();
+
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  setValue.call(screen.getByLabelText("Username"), "  autofilled_user  ");
+  setValue.call(screen.getByLabelText("Password"), "Synthetic-only123! ");
+  fireEvent.click(screen.getByRole("button", { name: "Sign In →" }));
+
+  expect(authApi.post).toHaveBeenCalledWith("token/", {
+    username: "autofilled_user",
+    password: "Synthetic-only123! ",
+  });
+  expect(await screen.findByText(/Sign-in failed. Check your username and password/)).toBeInTheDocument();
+});
+
 test("staff receives no token until the OTP has been verified", async () => {
   const profile = {
     username: "test_user",
@@ -186,7 +202,7 @@ test("failed credentials show a readable error", async () => {
   authApi.post.mockRejectedValueOnce({ response: { status: 401 } });
   renderLogin();
   enterCredentials();
-  expect(await screen.findByText(/invalid username or password/i)).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent(/check your username and password/i);
 });
 
 test("accepted login with a temporary profile failure preserves tokens and explains recovery", async () => {

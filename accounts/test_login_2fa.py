@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from accounts.models import OTPRequest
 
@@ -27,6 +27,22 @@ class LoginTwoFactorFlowTests(APITestCase):
             password=self.password,
             is_staff=True,
         )
+
+    def test_member_can_sign_in_with_same_password_after_logout_in_a_fresh_client(self):
+        credentials = {"username": self.member.username, "password": self.password}
+        first_login = self.client.post(reverse("token_obtain_pair"), credentials, format="json")
+        self.assertEqual(first_login.status_code, 200)
+        logout = self.client.post(
+            reverse("logout"),
+            {"refresh": first_login.data["refresh"]},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer " + first_login.data["access"],
+        )
+        self.assertEqual(logout.status_code, 200)
+
+        fresh_login = APIClient().post(reverse("token_obtain_pair"), credentials, format="json")
+        self.assertEqual(fresh_login.status_code, 200)
+        self.assertIn("access", fresh_login.data)
 
     def test_member_login_returns_tokens(self):
         response = self.client.post(
