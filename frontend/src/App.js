@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Link, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SaccoProvider } from "./context/SaccoContext";
@@ -68,6 +68,14 @@ function App() {
           <BrowserRouter>
             <Routes>
               {/* Public / Auth */}
+              <Route path={ROUTES.home} element={
+                <main className="container py-5">
+                  <h1>Nairobi West Transport Cooperative Society</h1>
+                  <p>Our cooperative offers savings, loans and welfare services to members.</p>
+                  <Link className="btn btn-primary me-3" to={ROUTES.login}>Member sign-in</Link>
+                  <Link className="btn btn-outline-primary" to={ROUTES.register}>Apply for membership</Link>
+                </main>
+              } />
               <Route path={ROUTES.login} element={<Login />} />
               <Route path={ROUTES.register} element={<Register />} />
               <Route path={ROUTES.forgotPassword} element={<ForgotPassword />} />

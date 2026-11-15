@@ -5,6 +5,13 @@ from django.conf import settings
 from django.http import JsonResponse
 from rest_framework_simplejwt.views import TokenRefreshView
 from accounts.auth_views import custom_token_obtain
+from .seo import (
+    GOOGLE_VERIFICATION_FILENAME,
+    NonIndexableReactView,
+    google_verification,
+    robots_txt,
+    sitemap_xml,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -20,6 +27,11 @@ urlpatterns = [
     path("api/", include("core.payments_urls")),
     path("api/token/", custom_token_obtain, name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+
+    # Public SEO endpoints (must precede the SPA catch-all below)
+    path("robots.txt", robots_txt, name="robots"),
+    path("sitemap.xml", sitemap_xml, name="sitemap"),
+    path(GOOGLE_VERIFICATION_FILENAME, google_verification, name="google-site-verification"),
 ]
 
 # User uploads, including identity documents, are intentionally not exposed as
@@ -29,7 +41,8 @@ urlpatterns = [
 # WhiteNoise handles /static/ — this catch-all handles React Router paths.
 if not settings.DEBUG:
     urlpatterns += [
+        path("", TemplateView.as_view(template_name="index.html"), name="public-home"),
         re_path(r"^(?!api/|admin/|static/|media/).*$",
-                TemplateView.as_view(template_name="index.html"),
+                NonIndexableReactView.as_view(template_name="index.html"),
                 name="react-app"),
     ]

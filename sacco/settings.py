@@ -303,6 +303,12 @@ SACCO_EMAIL      = os.getenv("SACCO_EMAIL",      "info@nwtcs.co.ke")
 SACCO_PAYBILL    = os.getenv("SACCO_PAYBILL",    os.getenv("MPESA_SHORTCODE", "174379"))
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Public site / SEO
+# ─────────────────────────────────────────────────────────────────────────────
+# Public origin advertised by robots.txt and sitemap.xml.
+SITE_CANONICAL_URL = os.getenv("SITE_CANONICAL_URL", "https://nwtcs.onrender.com").rstrip("/")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # File upload limits
 # ─────────────────────────────────────────────────────────────────────────────
 ID_DOC_MAX_MB = int(os.getenv("ID_DOC_MAX_MB", "5"))

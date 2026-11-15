@@ -1,5 +1,11 @@
 # Deployment and integration readiness
 
+## Google Search Console
+
+Deploy this repository from its root so the checked-in file under `verification/` is available to Django alongside the React build. The file does not go through React or `collectstatic`, and no verification environment variable is required.
+
+After the deploy, confirm that [the verification URL](https://nwtcs.onrender.com/google40b1f54e0b70526a.html) returns HTTP 200 without redirecting and matches the checked-in file byte for byte. In Google Search Console, use the URL-prefix property `https://nwtcs.onrender.com/`, select HTML file verification, and click **Verify**. Keep the file deployed and submit `https://nwtcs.onrender.com/sitemap.xml` once ownership is verified.
+
 ## Before deploying
 
 1. Copy `.env.example` to `.env` for local use, or set the same values in the deployment secret store. Never commit `.env` or real provider credentials.

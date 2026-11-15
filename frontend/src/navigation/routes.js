@@ -1,7 +1,7 @@
 // Registered route vocabulary. Navigation items below never point at a
 // placeholder or grant permissions; Django remains authoritative.
 export const ROUTES = Object.freeze({
-  login: "/", register: "/register", forgotPassword: "/forgot-password",
+  login: "/login", home: "/", register: "/register", forgotPassword: "/forgot-password",
   verifyOtp: "/verify-otp", resetPassword: "/reset-password",
   dashboard: "/dashboard", savings: "/savings", loans: "/loans",
   loanCalculator: "/loans/calculator",
